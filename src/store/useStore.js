@@ -88,31 +88,110 @@ export const TEMPLATE_LIBRARY = [
     },
 ];
 
-// Compliance Rules from Appendix B
+// Compliance Rules from Appendix B (Full Implementation)
 export const COMPLIANCE_RULES = {
+    // COPY RULES - Hard Fail
     prohibitedTerms: [
-        'money back', 'money-back', 'guarantee', 'guaranteed',
-        'best ever', 'winner', 'winning', 'win', 'free',
-        'sustainable', 'sustainability', 'eco-friendly', 'green',
-        'competition', 'prize', 'survey', '#1', 'number one'
+        // Money-back guarantees
+        'money back', 'money-back', 'guarantee', 'guaranteed', 'refund',
+        // Competition/prize
+        'competition', 'prize', 'winner', 'winning', 'win', 'lottery', 'raffle',
+        // Sustainability/green claims
+        'sustainable', 'sustainability', 'eco-friendly', 'eco friendly', 'green',
+        'carbon neutral', 'carbon-neutral', 'carbon footprint', 'environmentally friendly',
+        'organic', 'recyclable', 'recycled', 'biodegradable', 'zero waste',
+        // Claims
+        'best ever', '#1', 'number one', 'number 1', 'award winning', 'award-winning',
+        'clinically proven', 'scientifically proven', 'doctor recommended',
+        // T&Cs indicators
+        'terms and conditions', 't&c', 't&cs', 'terms apply',
+        // Free
+        'free', 'gratis',
+        // Survey/research
+        'survey', 'research shows', 'studies show',
+        // Charity
+        'charity', 'charitable', 'donate', 'donation', 'fundraising',
     ],
-    minFontSize: { standard: 20, checkout: 10 },
+
+    // Valid Tesco tags
+    validTags: [
+        'Only at Tesco',
+        'Available at Tesco',
+        'Selected stores. While stocks last.',
+    ],
+
+    // Clubcard tag format
+    clubcardTagFormat: 'Available in selected stores. Clubcard/app required. Ends DD/MM',
+
+    // Minimum font sizes
+    minFontSize: {
+        standard: 20,       // Brand, Checkout double density, Social
+        checkoutSingle: 10, // Checkout single density
+        says: 12,           // SAYS format
+    },
+
+    // Safe zones (9:16 Story formats)
     safeZones: {
         story: { top: 200, bottom: 250 },
     },
+
+    // Value tile rules
     valueTileRules: {
         pricesOnlyInTiles: true,
         noManualPriceTyping: true,
+        types: ['new', 'white', 'clubcard'],
+        // Size constraints per tile type
+        sizes: {
+            new: { minWidth: 100, maxWidth: 150, minHeight: 40, maxHeight: 60 },
+            white: { minWidth: 120, maxWidth: 180, minHeight: 45, maxHeight: 65 },
+            clubcard: { minWidth: 150, maxWidth: 200, minHeight: 55, maxHeight: 80 },
+        },
     },
-    alcoholRules: {
-        drinkawareRequired: true,
+
+    // Drinkaware rules
+    drinkawareRules: {
+        required: true,
         minHeight: 20,
         minHeightSays: 12,
+        allowedColors: ['#000000', '#ffffff', 'black', 'white'],
     },
-    logoPlacement: {
-        tescoLogoRequired: false,
-        minClearSpace: 20,
+
+    // Packshot rules
+    packshotRules: {
+        maxCount: 3,
+        leadRequired: true,
+        minGapFromCTA: {
+            doubleDensity: 24,
+            singleDensity: 12,
+        },
     },
+
+    // Contrast requirements (WCAG AA)
+    contrastRequirements: {
+        normalText: 4.5,
+        largeText: 3.0,
+        largeTextThreshold: 24, // px - text above this is "large"
+    },
+
+    // Price pattern detection
+    pricePatterns: [
+        /£\d+(\.\d{2})?/,     // £2.50
+        /\d+p\b/i,             // 50p
+        /\d+%\s*(off|discount)/i, // 50% off
+        /save\s*£?\d+/i,       // save £5
+        /was\s*£?\d+/i,        // was £10
+        /now\s*£?\d+/i,        // now £5
+        /only\s*£?\d+/i,       // only £5
+        /from\s*£?\d+/i,       // from £5
+    ],
+
+    // Claims detection patterns
+    claimsPatterns: [
+        /\*/,                   // Asterisk (indicates T&C)
+        /\d+%\s*of\s*(people|customers|users)/i, // Survey claims
+        /voted\s*(best|#1)/i,
+        /recommended\s*by/i,
+    ],
 };
 
 export const useStore = create((set, get) => ({
@@ -162,6 +241,20 @@ export const useStore = create((set, get) => ({
     backgroundImage: null,
     setBackgroundImage: (img) => set({ backgroundImage: img }),
 
+    // Logo
+    logo: null,
+    setLogo: (logo) => set({ logo }),
+
+    // Packshots tracking
+    packshots: [],
+    addPackshot: (packshot) => set(state => ({
+        packshots: state.packshots.length < 3 ? [...state.packshots, packshot] : state.packshots
+    })),
+    removePackshot: (id) => set(state => ({
+        packshots: state.packshots.filter(p => p.id !== id)
+    })),
+    clearPackshots: () => set({ packshots: [] }),
+
     // Saved color palette
     savedColors: ['#003d7a', '#e51c23', '#ffffff', '#ffd700', '#00a650', '#000000', '#f5f5f5', '#ff9800'],
     addSavedColor: (color) => set(state => ({
@@ -198,7 +291,7 @@ export const useStore = create((set, get) => ({
     saveToHistory: () => {
         const canvas = get().canvas;
         if (!canvas) return;
-        const json = JSON.stringify(canvas.toJSON(['id', 'customName', 'isValueTile', 'isDrinkaware', 'isSafeZone', 'isBackground', 'isLogo']));
+        const json = JSON.stringify(canvas.toJSON(['id', 'customName', 'isValueTile', 'valueTileType', 'isDrinkaware', 'isSafeZone', 'isBackground', 'isLogo', 'isPackshot', 'isLeadPackshot', 'isTag']));
         set(state => {
             const newHistory = [...state.history.slice(0, state.historyIndex + 1), json].slice(-state.maxHistory);
             return { history: newHistory, historyIndex: newHistory.length - 1 };

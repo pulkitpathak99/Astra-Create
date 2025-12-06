@@ -1,17 +1,17 @@
 import './index.css';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import CanvasEditor from './components/CanvasEditor';
 import PropertiesPanel from './components/PropertiesPanel';
 import Toolbar from './components/Toolbar';
 import Onboarding from './components/Onboarding';
-import AIAssistant from './components/AIAssistant';
 import CampaignGenerator from './components/CampaignGenerator';
 import useStore from './store/useStore';
 
 function App() {
-  const { showOnboarding, setShowOnboarding, canvas, saveToHistory } = useStore();
+  const { showOnboarding, setShowOnboarding, canvas, saveToHistory, complianceErrors, complianceWarnings } = useStore();
   const [showCampaignGenerator, setShowCampaignGenerator] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(45);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -50,13 +50,11 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canvas, saveToHistory]);
 
-  // Expose campaign generator to toolbar
-  useEffect(() => {
-    window.openCampaignGenerator = () => setShowCampaignGenerator(true);
-  }, []);
+  const isCompliant = complianceErrors.length === 0;
+  const totalIssues = complianceErrors.length + complianceWarnings.length;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-gray-950">
+    <div className="app-container">
       {/* Onboarding Modal */}
       {showOnboarding && (
         <Onboarding onClose={() => setShowOnboarding(false)} />
@@ -70,20 +68,39 @@ function App() {
       {/* Top Toolbar */}
       <Toolbar onOpenCampaign={() => setShowCampaignGenerator(true)} />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Workspace */}
+      <div className="workspace">
         {/* Left Sidebar */}
         <Sidebar />
 
         {/* Canvas Workspace */}
-        <CanvasEditor />
+        <div className="canvas-workspace">
+          <CanvasEditor />
+        </div>
 
         {/* Right Properties Panel */}
         <PropertiesPanel />
       </div>
 
-      {/* AI Assistant (Floating) */}
-      <AIAssistant />
+      {/* Status Bar */}
+      <div className="status-bar">
+        <div className="flex items-center gap-2">
+          <span>Zoom: {zoomLevel}%</span>
+        </div>
+
+        <div className="flex-1" />
+
+        <div className={`compliance-indicator ${isCompliant ? 'compliant' : 'has-errors'}`}>
+          <span className={`compliance-dot ${isCompliant ? 'success' : 'error'}`} />
+          {isCompliant ? 'Compliant' : `${totalIssues} issue${totalIssues !== 1 ? 's' : ''}`}
+        </div>
+
+        <div className="flex items-center gap-4 ml-4">
+          <span className="text-muted">⌘Z Undo</span>
+          <span className="text-muted">⌫ Delete</span>
+          <span className="text-muted">⌘E Export</span>
+        </div>
+      </div>
     </div>
   );
 }
