@@ -12,13 +12,14 @@ export const useCompliance = () => {
     currentFormat,
     canvas,
     backgroundColor,
+    calculateComplianceScore,
   } = useStore();
 
   // ============================================
   // COPY RULES (Appendix B - Hard Fail)
   // ============================================
 
-  // Check text for prohibited terms (T&Cs, competitions, sustainability, charity, money-back, claims)
+  // Check text for prohibited terms
   const checkProhibitedTerms = useCallback((text, objectId) => {
     const lowerText = text.toLowerCase();
     const found = COMPLIANCE_RULES.prohibitedTerms.filter(term =>
@@ -31,9 +32,10 @@ export const useCompliance = () => {
         type: 'copy',
         severity: 'error',
         title: 'Prohibited Content',
-        message: `Contains: "${found.slice(0, 3).join('", "')}"${found.length > 3 ? ` (+${found.length - 3} more)` : ''}`,
+        message: `Contains: "${found.slice(0, 3).join('", "')}"`,
         suggestion: 'Remove these terms - not allowed on self-serve media.',
-        rule: 'Appendix B: Copy Rules (Hard Fail)',
+        plainEnglish: `The word${found.length > 1 ? 's' : ''} "${found.slice(0, 2).join('", "')}" cannot be used in Tesco ads. Try alternatives like "Zero Sugar" instead of "free" or "Great Value" instead of price claims.`,
+        rule: 'Appendix B: Copy Rules',
         objectId,
       });
       return false;
@@ -54,7 +56,7 @@ export const useCompliance = () => {
         title: 'Claims Detected',
         message: 'Text contains claim indicators (asterisk, survey reference)',
         suggestion: 'Remove claims - cannot be verified on self-serve.',
-        rule: 'Appendix B: Claims (Hard Fail)',
+        rule: 'Appendix B: Claims',
         objectId,
       });
       return false;
@@ -63,89 +65,213 @@ export const useCompliance = () => {
     return true;
   }, [addComplianceError, removeComplianceIssue]);
 
-  // Check for price text outside value tiles
-  const checkPriceText = useCallback((text, objectId, isValueTile = false) => {
-    if (isValueTile) return true;
+  // Price validation - Prices only allowed in Value Tiles
+  const checkPriceText = useCallback((text, objectId, isValueTile) => {
+    // If it's already marked as a value tile (via prop), it's valid
+    if (isValueTile) {
+      removeComplianceIssue(`price-outside-tile-${objectId}`);
+      return true;
+    }
 
-    const hasPrice = COMPLIANCE_RULES.pricePatterns.some(p => p.test(text));
+    // Check if object is a value tile by ID lookup (in case prop wasn't passed)
+    const obj = canvas?.getObjects().find(o => (o.id === objectId || o._id === objectId));
+    if (obj && obj.isValueTile) {
+       removeComplianceIssue(`price-outside-tile-${objectId}`);
+       return true;
+    }
 
-    if (hasPrice) {
+    const pricePattern = /£\d+|\d+p|£\d+\.\d{2}/;
+    if (pricePattern.test(text)) {
       addComplianceError({
-        id: `price-${objectId}`,
+        id: `price-outside-tile-${objectId}`,
         type: 'copy',
         severity: 'error',
         title: 'Price Outside Value Tile',
         message: 'Prices must only appear in Value Tile components',
-        suggestion: 'Use a Value Tile from the sidebar for pricing.',
-        rule: 'Appendix B: Price Callouts (Hard Fail)',
+        suggestion: 'Remove price from text and use a Value Tile.',
+        rule: 'Appendix A: Value Tiles',
         objectId,
       });
       return false;
     }
-    removeComplianceIssue(`price-${objectId}`);
+    removeComplianceIssue(`price-outside-tile-${objectId}`);
+    return true;
+  }, [canvas, addComplianceError, removeComplianceIssue]);
+
+  // ============================================
+  // HEADLINE/SUBHEAD RULES (Appendix A)
+  // ============================================
+
+  // Check headline character limit (35 max)
+  const checkHeadlineLength = useCallback((text, objectId, isHeadline = false) => {
+    if (!isHeadline) return true;
+
+    const maxLength = COMPLIANCE_RULES.headlineRules.maxLength;
+    if (text.length > maxLength) {
+      addComplianceError({
+        id: `headline-length-${objectId}`,
+        type: 'copy',
+        severity: 'error',
+        title: 'Headline Too Long',
+        message: `${text.length} chars (max ${maxLength})`,
+        suggestion: `Shorten to ${maxLength} characters or less.`,
+        rule: 'Appendix A: Headline',
+        objectId,
+      });
+      return false;
+    }
+    removeComplianceIssue(`headline-length-${objectId}`);
     return true;
   }, [addComplianceError, removeComplianceIssue]);
 
-  // Check Tesco tag text validity
-  const checkTagText = useCallback((text, objectId, hasClubcardTile = false) => {
-    if (!text) return true;
-    
-    const normalizedText = text.trim();
-    const isValidTag = COMPLIANCE_RULES.validTags.some(tag => 
-      normalizedText.toLowerCase().includes(tag.toLowerCase())
+  // Check subhead word count (20 max)
+  const checkSubheadWords = useCallback((text, objectId, isSubhead = false) => {
+    if (!isSubhead) return true;
+
+    const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+    const maxWords = COMPLIANCE_RULES.subheadRules.maxWords;
+
+    if (wordCount > maxWords) {
+      addComplianceError({
+        id: `subhead-words-${objectId}`,
+        type: 'copy',
+        severity: 'error',
+        title: 'Subhead Too Long',
+        message: `${wordCount} words (max ${maxWords})`,
+        suggestion: `Reduce to ${maxWords} words or less.`,
+        rule: 'Appendix A: Subhead',
+        objectId,
+      });
+      return false;
+    }
+    removeComplianceIssue(`subhead-words-${objectId}`);
+    return true;
+  }, [addComplianceError, removeComplianceIssue]);
+
+  // ============================================
+  // TAG RULES (Appendix A & B)
+  // ============================================
+
+  // Check tag text validity
+  const checkTagText = useCallback((text, objectId) => {
+    const validTags = Object.values(COMPLIANCE_RULES.validTags);
+    const isValidTag = validTags.some(tag =>
+      text.toLowerCase().includes(tag.toLowerCase())
     );
-    
-    // If Clubcard tile is present, tag must include specific text
-    if (hasClubcardTile) {
-      const hasClubcardText = /clubcard.*required.*ends\s*\d{1,2}\/\d{1,2}/i.test(normalizedText);
-      if (!hasClubcardText) {
-        addComplianceError({
+
+    // Also check for Clubcard format if has Clubcard text
+    if (text.toLowerCase().includes('clubcard')) {
+      const hasProperFormat = COMPLIANCE_RULES.clubcardTagPattern.test(text);
+      if (!hasProperFormat) {
+        addComplianceWarning({
           id: `tag-clubcard-${objectId}`,
           type: 'design',
-          severity: 'error',
-          title: 'Invalid Clubcard Tag',
-          message: 'Clubcard Price requires tag with "Ends DD/MM"',
-          suggestion: 'Add end date to tag: "Clubcard/app required. Ends DD/MM"',
-          rule: 'Appendix B: Tesco Tags (Hard Fail)',
+          severity: 'warning',
+          title: 'Clubcard Tag Format',
+          message: 'Clubcard tags should include end date',
+          suggestion: 'Use format: "Clubcard/app required. Ends DD/MM"',
+          rule: 'Appendix A: DD/MM',
           objectId,
         });
         return false;
       }
     }
-    
+
+    if (!isValidTag && !text.toLowerCase().includes('clubcard')) {
+      addComplianceWarning({
+        id: `tag-invalid-${objectId}`,
+        type: 'design',
+        severity: 'warning',
+        title: 'Non-Standard Tag',
+        message: 'Tag text should use standard Tesco format',
+        suggestion: 'Use: "Only at Tesco", "Available at Tesco", or stock warning.',
+        rule: 'Appendix B: Tesco Tags',
+        objectId,
+      });
+      return false;
+    }
+
+    removeComplianceIssue(`tag-invalid-${objectId}`);
     removeComplianceIssue(`tag-clubcard-${objectId}`);
     return true;
+  }, [addComplianceWarning, removeComplianceIssue]);
+
+  // ============================================
+  // VALUE TILE RULES (Appendix A & B)
+  // ============================================
+
+  // Check for overlapping with value tiles
+  const checkValueTileOverlap = useCallback((object, valueTiles) => {
+    if (object.isValueTile) return true; // Don't check tile against itself
+
+    const objectId = object.id || object._id || 'obj';
+
+    for (const tile of valueTiles) {
+      if (isOverlapping(object, tile)) {
+        addComplianceError({
+          id: `tile-overlap-${objectId}`,
+          type: 'design',
+          severity: 'error',
+          title: 'Value Tile Overlap',
+          message: 'Content cannot overlap value tile',
+          suggestion: 'Move element away from the value tile.',
+          rule: 'Appendix B: Value Tile',
+          objectId,
+        });
+        return false;
+      }
+    }
+
+    removeComplianceIssue(`tile-overlap-${objectId}`);
+    return true;
   }, [addComplianceError, removeComplianceIssue]);
+
+  // Helper: Check if two objects overlap
+  const isOverlapping = (obj1, obj2) => {
+    const b1 = obj1.getBoundingRect ? obj1.getBoundingRect() : getRect(obj1);
+    const b2 = obj2.getBoundingRect ? obj2.getBoundingRect() : getRect(obj2);
+
+    return !(b1.left > b2.left + b2.width ||
+      b1.left + b1.width < b2.left ||
+      b1.top > b2.top + b2.height ||
+      b1.top + b1.height < b2.top);
+  };
+
+  const getRect = (obj) => ({
+    left: obj.left || 0,
+    top: obj.top || 0,
+    width: (obj.width || 0) * (obj.scaleX || 1),
+    height: (obj.height || 0) * (obj.scaleY || 1),
+  });
 
   // ============================================
   // ACCESSIBILITY RULES (Appendix B - Hard Fail)
   // ============================================
 
   // Check font size
-  const checkFontSize = useCallback((fontSize, objectId, isSystemElement = false, formatType = 'standard') => {
-    if (isSystemElement) {
-      removeComplianceIssue(`fontsize-${objectId}`);
-      return true;
-    }
-
-    const minSize = COMPLIANCE_RULES.minFontSize[formatType] || COMPLIANCE_RULES.minFontSize.standard;
+  const checkFontSize = useCallback((fontSize, objectId, isSmallText = false) => {
+    const format = FORMAT_PRESETS[currentFormat];
+    const isSmallFormat = format && format.height < 200;
     
+    // Relaxed minimum for small banners (e.g. 728x90)
+    const minSize = isSmallFormat ? 10 : (COMPLIANCE_RULES.minFontSize.standard || 20);
+
     if (fontSize < minSize) {
       addComplianceError({
-        id: `fontsize-${objectId}`,
+        id: `font-size-${objectId}`,
         type: 'accessibility',
         severity: 'error',
         title: 'Font Size Too Small',
-        message: `${fontSize}px is below minimum ${minSize}px`,
-        suggestion: `Increase to at least ${minSize}px for accessibility compliance.`,
-        rule: 'Appendix B: Minimum Font Size (Hard Fail)',
+        message: `${Math.round(fontSize)}px is below minimum ${minSize}px`,
+        suggestion: `Increase font size to at least ${minSize}px.`,
+        rule: 'Appendix B: Legibility',
         objectId,
       });
       return false;
     }
-    removeComplianceIssue(`fontsize-${objectId}`);
+    removeComplianceIssue(`font-size-${objectId}`);
     return true;
-  }, [addComplianceError, removeComplianceIssue]);
+  }, [currentFormat, addComplianceError, removeComplianceIssue]);
 
   // Check contrast (WCAG AA)
   const checkContrast = useCallback((textColor, bgColor, objectId, fontSize = 16, isSystemElement = false) => {
@@ -156,22 +282,21 @@ export const useCompliance = () => {
 
     const effectiveBg = bgColor || backgroundColor;
     const contrast = tinycolor.readability(textColor, effectiveBg);
-    
-    // Large text (24px+) has lower contrast requirement
+
     const isLargeText = fontSize >= COMPLIANCE_RULES.contrastRequirements.largeTextThreshold;
-    const requiredContrast = isLargeText 
-      ? COMPLIANCE_RULES.contrastRequirements.largeText 
+    const requiredContrast = isLargeText
+      ? COMPLIANCE_RULES.contrastRequirements.largeText
       : COMPLIANCE_RULES.contrastRequirements.normalText;
-    
+
     if (contrast < requiredContrast) {
       addComplianceError({
         id: `contrast-${objectId}`,
         type: 'accessibility',
         severity: 'error',
         title: 'Insufficient Contrast',
-        message: `Ratio ${contrast.toFixed(1)}:1 (need ${requiredContrast}:1 for ${isLargeText ? 'large' : 'normal'} text)`,
+        message: `Ratio ${contrast.toFixed(1)}:1 (need ${requiredContrast}:1)`,
         suggestion: 'Increase contrast for WCAG AA compliance.',
-        rule: 'Appendix B: Contrast (Hard Fail)',
+        rule: 'Appendix B: Contrast',
         objectId,
       });
       return false;
@@ -184,12 +309,12 @@ export const useCompliance = () => {
   // FORMAT RULES (Appendix B - Hard Fail)
   // ============================================
 
-  // Check safe zone (9:16 formats)
+  // Check safe zone (9:16 formats only)
   const checkSafeZone = useCallback((object) => {
     const format = FORMAT_PRESETS[currentFormat];
     if (!format || format.ratio !== '9:16') return true;
 
-    // Skip system elements and value tiles (they're positioned intentionally)
+    // Skip ALL system elements
     if (object.isValueTile || object.isDrinkaware || object.isTag || object.isBackground) return true;
 
     const objectId = object.id || object._id || 'obj';
@@ -202,18 +327,17 @@ export const useCompliance = () => {
     const inTopZone = objTop < safeZone.top;
     const inBottomZone = objBottom > (format.height - safeZone.bottom);
 
-    // Only check text, logos, and value tiles per spec
-    const isCheckableElement = object.type === 'i-text' || object.type === 'text' || object.isLogo || object.isValueTile;
-    
+    const isCheckableElement = object.type === 'i-text' || object.type === 'text' || object.isLogo;
+
     if ((inTopZone || inBottomZone) && isCheckableElement) {
       addComplianceError({
         id: `safezone-${objectId}`,
         type: 'format',
         severity: 'error',
         title: 'Safe Zone Violation',
-        message: `Element in ${inTopZone ? 'top 200px' : 'bottom 250px'} safe zone`,
-        suggestion: 'Move element out of safe zone - will be obscured by social UI.',
-        rule: 'Appendix B: Social Safe Zone (Hard Fail)',
+        message: `Element in ${inTopZone ? 'top' : 'bottom'} ${inTopZone ? safeZone.top : safeZone.bottom}px zone`,
+        suggestion: 'Move element out of safe zone for 9:16 formats.',
+        rule: 'Appendix B: Safe Zone',
         objectId,
       });
       return false;
@@ -226,7 +350,6 @@ export const useCompliance = () => {
   // ALCOHOL RULES (Appendix B - Hard Fail)
   // ============================================
 
-  // Check Drinkaware requirements
   const checkDrinkaware = useCallback(() => {
     if (!isAlcoholProduct) {
       removeComplianceIssue('drinkaware');
@@ -235,10 +358,10 @@ export const useCompliance = () => {
       return true;
     }
 
-    if (!canvas) return false;
+    if (!canvas) return true;
 
     const drinkawareObjects = canvas.getObjects().filter(o => o.isDrinkaware);
-    
+
     if (drinkawareObjects.length === 0) {
       addComplianceError({
         id: 'drinkaware',
@@ -246,211 +369,404 @@ export const useCompliance = () => {
         severity: 'error',
         title: 'Drinkaware Required',
         message: 'Alcohol products must include Drinkaware lockup',
-        suggestion: 'Add Drinkaware from sidebar (mandatory for alcohol).',
-        rule: 'Appendix B: Alcohol (Hard Fail)',
+        suggestion: 'Add Drinkaware from sidebar.',
+        rule: 'Appendix B: Alcohol',
       });
       return false;
     }
-    
-    // Check Drinkaware height (min 20px, or 12px for SAYS)
-    const drinkawareText = drinkawareObjects.find(o => o.type === 'i-text' || o.type === 'text');
-    if (drinkawareText) {
-      const minHeight = COMPLIANCE_RULES.drinkawareRules.minHeight;
-      const fontSize = drinkawareText.fontSize || 14;
-      
-      if (fontSize < minHeight) {
-        addComplianceError({
-          id: 'drinkaware-height',
-          type: 'alcohol',
-          severity: 'error',
-          title: 'Drinkaware Too Small',
-          message: `Drinkaware text ${fontSize}px is below minimum ${minHeight}px`,
-          suggestion: `Increase Drinkaware to at least ${minHeight}px.`,
-          rule: 'Appendix B: Drinkaware Height (Hard Fail)',
-        });
-        return false;
-      }
-      
-      // Check color (must be black or white only)
-      const color = (drinkawareText.fill || '').toLowerCase();
-      const isValidColor = COMPLIANCE_RULES.drinkawareRules.allowedColors.some(c => 
-        color === c.toLowerCase() || color === c
-      );
-      
-      if (!isValidColor && color !== '#000000' && color !== '#ffffff') {
-        addComplianceWarning({
-          id: 'drinkaware-color',
-          type: 'alcohol',
-          severity: 'warning',
-          title: 'Drinkaware Color',
-          message: 'Drinkaware should be all-black or all-white',
-          suggestion: 'Change Drinkaware color to #000000 or #ffffff.',
-          rule: 'Appendix B: Drinkaware Color',
-        });
-      }
+
+    // Check Drinkaware height (min 20px)
+    const minHeight = COMPLIANCE_RULES.drinkawareRules.minHeight;
+    const hasValidHeight = drinkawareObjects.some(obj => {
+      const height = (obj.height || 0) * (obj.scaleY || 1);
+      return height >= minHeight;
+    });
+
+    if (!hasValidHeight) {
+      addComplianceError({
+        id: 'drinkaware-height',
+        type: 'alcohol',
+        severity: 'error',
+        title: 'Drinkaware Too Small',
+        message: `Must be at least ${minHeight}px in height`,
+        suggestion: 'Increase Drinkaware lockup size.',
+        rule: 'Appendix B: Drinkaware',
+      });
+      return false;
     }
-    
+
     removeComplianceIssue('drinkaware');
     removeComplianceIssue('drinkaware-height');
     return true;
-  }, [isAlcoholProduct, canvas, addComplianceError, addComplianceWarning, removeComplianceIssue]);
+  }, [isAlcoholProduct, canvas, addComplianceError, removeComplianceIssue]);
 
   // ============================================
-  // DESIGN RULES (Appendix B - Hard Fail)
+  // CLUBCARD TAG VALIDATION
   // ============================================
 
-  // Check for content overlapping value tiles
-  const checkValueTileOverlap = useCallback(() => {
+  const checkClubcardTag = useCallback(() => {
     if (!canvas) return true;
-    
-    const valueTiles = canvas.getObjects().filter(o => o.isValueTile);
-    const otherObjects = canvas.getObjects().filter(o => 
-      !o.isValueTile && !o.isSafeZone && !o.isBackground && o.selectable !== false
-    );
-    
-    let hasOverlap = false;
-    
-    valueTiles.forEach(tile => {
-      const tileRect = tile.getBoundingRect();
-      
-      otherObjects.forEach(obj => {
-        const objRect = obj.getBoundingRect();
-        
-        // Check for intersection
-        const intersects = !(
-          objRect.left > tileRect.left + tileRect.width ||
-          objRect.left + objRect.width < tileRect.left ||
-          objRect.top > tileRect.top + tileRect.height ||
-          objRect.top + objRect.height < tileRect.top
-        );
-        
-        if (intersects) {
-          hasOverlap = true;
-          addComplianceError({
-            id: `overlap-${obj.id || 'obj'}`,
-            type: 'design',
-            severity: 'error',
-            title: 'Value Tile Overlap',
-            message: 'Content cannot overlay Value Tile',
-            suggestion: 'Move element away from Value Tile.',
-            rule: 'Appendix B: Value Tile (Hard Fail)',
-            objectId: obj.id,
-          });
-        }
-      });
-    });
-    
-    if (!hasOverlap) {
-      removeComplianceIssue('overlap-');
+
+    const hasClubcardTile = canvas.getObjects().some(o => o.valueTileType === 'clubcard');
+    const tags = canvas.getObjects().filter(o => o.isTag);
+
+    if (!hasClubcardTile || tags.length === 0) {
+      removeComplianceIssue('clubcard-tag');
+      return true;
     }
-    
-    return !hasOverlap;
-  }, [canvas, addComplianceError, removeComplianceIssue]);
+
+    const hasValidClubcardTag = tags.some(tag => {
+      const text = tag.text || '';
+      return COMPLIANCE_RULES.clubcardTagPattern.test(text);
+    });
+
+    if (!hasValidClubcardTag) {
+      addComplianceWarning({
+        id: 'clubcard-tag',
+        type: 'design',
+        severity: 'warning',
+        title: 'Clubcard Tag Required',
+        message: 'Clubcard price requires tag with end date',
+        suggestion: 'Add tag: "Clubcard/app required. Ends DD/MM"',
+        rule: 'Appendix A: Clubcard Tags',
+      });
+      return false;
+    }
+
+    removeComplianceIssue('clubcard-tag');
+    return true;
+  }, [canvas, addComplianceWarning, removeComplianceIssue]);
 
   // ============================================
-  // PACKSHOT RULES (Appendix B)
+  // PACKSHOT RULES (Appendix A & B)
   // ============================================
 
-  // Check packshot requirements
   const checkPackshots = useCallback(() => {
     if (!canvas) return true;
-    
+
     const packshots = canvas.getObjects().filter(o => o.isPackshot);
-    
-    // Check max count
-    if (packshots.length > COMPLIANCE_RULES.packshotRules.maxCount) {
+    const maxCount = COMPLIANCE_RULES.packshotRules.maxCount;
+
+    // Check max packshot count
+    if (packshots.length > maxCount) {
       addComplianceError({
-        id: 'packshot-count',
-        type: 'packshot',
+        id: 'packshots-max',
+        type: 'design',
         severity: 'error',
         title: 'Too Many Packshots',
-        message: `Maximum ${COMPLIANCE_RULES.packshotRules.maxCount} packshots allowed`,
-        suggestion: 'Remove extra packshots.',
+        message: `${packshots.length} packshots (max ${maxCount})`,
+        suggestion: `Remove ${packshots.length - maxCount} packshot(s).`,
         rule: 'Appendix A: Packshot',
       });
       return false;
     }
-    
-    // Check lead packshot required
-    if (packshots.length === 0) {
-      addComplianceWarning({
-        id: 'packshot-required',
-        type: 'packshot',
-        severity: 'warning',
-        title: 'Packshot Missing',
-        message: 'Lead packshot is required',
-        suggestion: 'Upload a product packshot from the sidebar.',
-        rule: 'Appendix A: Packshot',
-      });
-    } else {
-      removeComplianceIssue('packshot-required');
+
+    // Check for lead packshot
+    if (packshots.length > 0) {
+      const hasLead = packshots.some(p => p.isLeadPackshot);
+      if (!hasLead) {
+        addComplianceWarning({
+          id: 'packshot-lead',
+          type: 'design',
+          severity: 'warning',
+          title: 'No Lead Packshot',
+          message: 'Consider marking a primary product',
+          suggestion: 'Set one packshot as lead product.',
+          rule: 'Appendix A: Lead Product',
+        });
+      } else {
+        removeComplianceIssue('packshot-lead');
+      }
     }
-    
-    removeComplianceIssue('packshot-count');
+
+    removeComplianceIssue('packshots-max');
     return true;
   }, [canvas, addComplianceError, addComplianceWarning, removeComplianceIssue]);
 
   // ============================================
-  // REQUIRED ELEMENTS (Appendix A)
+  // CTA RULES (Appendix B)
+  // ============================================
+
+  // CTA position validation - No CTA elements allowed
+  const checkCTAPosition = useCallback(() => {
+    if (!canvas) return true;
+
+    const ctaObjects = canvas.getObjects().filter(o =>
+      o.isCTA || o.customName?.toLowerCase().includes('cta') ||
+      (o.text && o.text.toLowerCase().includes('shop now'))
+    );
+
+    if (ctaObjects.length > 0) {
+      addComplianceError({
+        id: 'cta-not-allowed',
+        type: 'design',
+        severity: 'error',
+        title: 'CTA Not Allowed',
+        message: 'Self-serve creatives cannot include CTA buttons',
+        suggestion: 'Remove CTA buttons - Tesco applies CTA at serve time.',
+        plainEnglish: 'Tesco automatically adds "Shop Now" buttons to ads. You don\'t need to add them yourself.',
+        rule: 'Appendix B: CTA Rules',
+      });
+      return false;
+    }
+
+    removeComplianceIssue('cta-not-allowed');
+    return true;
+  }, [canvas, addComplianceError, removeComplianceIssue]);
+
+  // ============================================
+  // PACKSHOT-TO-CTA GAP VALIDATION (Appendix B)
+  // ============================================
+
+  const checkPackshotCTAGap = useCallback(() => {
+    if (!canvas) return true;
+
+    const packshots = canvas.getObjects().filter(o => o.isPackshot);
+    const format = FORMAT_PRESETS[currentFormat];
+    if (!format || packshots.length === 0) return true;
+
+    // CTA is typically at bottom center - check gap from bottom edge
+    const minGap = COMPLIANCE_RULES.packshotRules.safeZone.doubleDensity; // 24px
+    let hasError = false;
+
+    packshots.forEach((packshot, idx) => {
+      const objectId = packshot.id || `packshot-${idx}`;
+      const rect = packshot.getBoundingRect ? packshot.getBoundingRect() : getRect(packshot);
+      const bottomEdge = rect.top + rect.height;
+      const gap = format.height - bottomEdge;
+
+      if (gap < minGap) {
+        addComplianceWarning({
+          id: `packshot-cta-gap-${objectId}`,
+          type: 'design',
+          severity: 'warning',
+          title: 'Packshot Too Close to Bottom',
+          message: `${Math.round(gap)}px gap (min ${minGap}px for CTA placement)`,
+          suggestion: `Move packshot up by ${Math.ceil(minGap - gap)}px for CTA visibility.`,
+          plainEnglish: `Your product image is too close to the bottom. Tesco adds buttons there, so leave at least ${minGap}px space.`,
+          rule: 'Appendix B: Packshot Safe Zone',
+          objectId,
+        });
+        hasError = true;
+      } else {
+        removeComplianceIssue(`packshot-cta-gap-${objectId}`);
+      }
+    });
+
+    return !hasError;
+  }, [canvas, currentFormat, addComplianceWarning, removeComplianceIssue]);
+
+  // ============================================
+  // VALUE TILE SIZE VALIDATION (Appendix A)
+  // ============================================
+
+  const checkValueTileSize = useCallback(() => {
+    if (!canvas) return true;
+
+    const valueTiles = canvas.getObjects().filter(o => o.isValueTile && o.type === 'rect');
+    const sizes = COMPLIANCE_RULES.valueTileRules.sizes;
+    const format = FORMAT_PRESETS[currentFormat];
+    const config = format?.config || { valueTileScale: 1.0 };
+    const scale = config.valueTileScale;
+
+    let hasError = false;
+
+    valueTiles.forEach((tile, idx) => {
+      const objectId = tile.id || `tile-${idx}`;
+      const tileType = tile.valueTileType || 'clubcard';
+      const expectedSize = sizes[tileType];
+
+      if (!expectedSize) return;
+
+      const width = tile.width * (tile.scaleX || 1);
+      const height = tile.height * (tile.scaleY || 1);
+
+      // Calculate expected size based on format scale
+      const expectedWidth = expectedSize.width * scale;
+      const expectedHeight = expectedSize.height * scale;
+
+      // Allow 10% tolerance
+      const widthOk = Math.abs(width - expectedWidth) / expectedWidth <= 0.1;
+      const heightOk = Math.abs(height - expectedHeight) / expectedHeight <= 0.1;
+
+      if (!widthOk || !heightOk) {
+        addComplianceWarning({
+          id: `tile-size-${objectId}`,
+          type: 'design',
+          severity: 'warning',
+          title: 'Value Tile Size Issue',
+          message: `${Math.round(width)}×${Math.round(height)}px (expected ~${Math.round(expectedWidth)}×${Math.round(expectedHeight)}px)`,
+          suggestion: 'Value tiles should use standard sizes for consistency.',
+          plainEnglish: `This price tile is ${widthOk ? '' : 'not the right width'}${!widthOk && !heightOk ? ' and ' : ''}${heightOk ? '' : 'not the right height'}. Use the preset tiles from the sidebar.`,
+          rule: 'Appendix A: Value Tile Sizes',
+          objectId,
+        });
+        hasError = true;
+      } else {
+        removeComplianceIssue(`tile-size-${objectId}`);
+      }
+    });
+
+    return !hasError;
+  }, [canvas, currentFormat, addComplianceWarning, removeComplianceIssue]);
+
+  // ============================================
+  // VALUE TILE POSITION - Must be in lower third
+  // ============================================
+
+  const checkValueTilePosition = useCallback(() => {
+    if (!canvas) return true;
+
+    const valueTiles = canvas.getObjects().filter(o => o.isValueTile && o.type === 'rect');
+    const format = FORMAT_PRESETS[currentFormat];
+    if (!format) return true;
+
+    // Check layout config
+    const config = format.config || {};
+    const isHorizontal = config.layout === 'horizontal';
+
+    // Value tiles should typically be in lower 40% of canvas
+    // For horizontal layouts, allow them anywhere (or at least lower 10% to catch extreme top placements)
+    const allowedTop = isHorizontal ? format.height * 0.1 : format.height * 0.6;
+    let hasError = false;
+
+    valueTiles.forEach((tile, idx) => {
+      const objectId = tile.id || `tile-${idx}`;
+      const rect = tile.getBoundingRect ? tile.getBoundingRect() : getRect(tile);
+
+      if (rect.top < allowedTop) {
+        addComplianceWarning({
+          id: `tile-position-${objectId}`,
+          type: 'design',
+          severity: 'warning',
+          title: 'Value Tile Position',
+          message: 'Value tile is positioned too high on canvas',
+          suggestion: 'Move value tile to lower portion of the creative.',
+          plainEnglish: 'Price tiles work best when placed lower in the design, near the product image. Consider moving it down.',
+          rule: 'Appendix A: Value Tile Placement',
+          objectId,
+        });
+        hasError = true;
+      } else {
+        removeComplianceIssue(`tile-position-${objectId}`);
+      }
+    });
+
+    return !hasError;
+  }, [canvas, currentFormat, addComplianceWarning, removeComplianceIssue]);
+
+  // ============================================
+  // REQUIRED ELEMENTS (Warnings only)
   // ============================================
 
   const checkRequiredElements = useCallback(() => {
-    if (!canvas) return { errors: 0 };
-    
-    let errors = 0;
+    if (!canvas) return { warnings: 0 };
+
+    let warnings = 0;
     const objects = canvas.getObjects();
-    
-    // Check for headline (required)
-    const hasHeadline = objects.some(o => 
-      (o.type === 'i-text' || o.type === 'text') && 
-      o.fontSize >= 48 && 
-      !o.isValueTile && !o.isDrinkaware && !o.isTag
-    );
-    
+    const format = FORMAT_PRESETS[currentFormat];
+    const isSmallFormat = format && format.height < 200;
+
+    // Check for headline
+    // Detect by explicit name OR size threshold (scaled for small formats)
+    const hasHeadline = objects.some(o => {
+      const isText = o.type === 'i-text' || o.type === 'text';
+      if (!isText) return false;
+      
+      const isExplicitHeadline = o.customName && o.customName.toLowerCase().includes('headline');
+      const sizeThreshold = isSmallFormat ? 20 : 48;
+      const isBigEnough = o.fontSize >= sizeThreshold;
+      
+      return (isExplicitHeadline || isBigEnough) && !o.isValueTile && !o.isDrinkaware && !o.isTag;
+    });
+
     if (!hasHeadline) {
       addComplianceWarning({
         id: 'headline-required',
-        type: 'mandatory',
+        type: 'tip',
         severity: 'warning',
-        title: 'Headline Missing',
-        message: 'A headline is required on all banners',
+        title: 'Add Headline',
+        message: 'Headlines appear on all banners',
         suggestion: 'Add a headline from the Text section.',
-        rule: 'Appendix A: Headline',
+        rule: 'Appendix A: Required Elements',
       });
-      errors++;
+      warnings++;
     } else {
       removeComplianceIssue('headline-required');
     }
 
-    return { errors };
-  }, [canvas, addComplianceWarning, removeComplianceIssue]);
-
-  // ============================================
-  // MEDIA RULES (Appendix B - Warning)
-  // ============================================
-
-  // Check for people in images (would need AI detection in production)
-  const checkPeopleInImages = useCallback(() => {
-    // This would integrate with AI vision API in production
-    // For now, just check if any image is marked as containing people
-    if (!canvas) return true;
+    // Check for packshot
+    const hasPackshot = objects.some(o => 
+      o.isPackshot || 
+      (o.customName && o.customName.toLowerCase().includes('packshot')) ||
+      (o.customName && o.customName.toLowerCase().includes('product'))
+    );
     
-    const images = canvas.getObjects().filter(o => o.type === 'image' && o.containsPeople);
-    
-    if (images.length > 0) {
+    if (!hasPackshot) {
       addComplianceWarning({
-        id: 'people-confirm',
-        type: 'media',
+        id: 'packshot-required',
+        type: 'tip',
         severity: 'warning',
-        title: 'People Detected',
-        message: 'Confirm that people are integral to campaign',
-        suggestion: 'Verify you have rights to use images of people.',
-        rule: 'Appendix B: Photography of People',
+        title: 'Add Packshot',
+        message: 'Lead product is required',
+        suggestion: 'Upload a packshot from the sidebar.',
+        rule: 'Appendix A: Required Elements',
+      });
+      warnings++;
+    } else {
+      removeComplianceIssue('packshot-required');
+    }
+
+    return { warnings };
+  }, [canvas, currentFormat, addComplianceWarning, removeComplianceIssue]);
+
+  // ============================================
+  // TAG REQUIREMENT CHECK
+  // ============================================
+
+  const checkTagRequired = useCallback(() => {
+    if (!canvas) return true;
+
+    const objects = canvas.getObjects();
+    const hasTag = objects.some(o => o.isTag);
+    const hasValueTile = objects.some(o => o.isValueTile);
+    const hasPackshot = objects.some(o => o.isPackshot);
+
+    // If creative has value tiles (price, promotion, or new), tag is required
+    if (hasValueTile && !hasTag) {
+      addComplianceWarning({
+        id: 'tag-required-valuetile',
+        type: 'design',
+        severity: 'warning',
+        title: 'Tag Required',
+        message: 'Creatives with value tiles must include a Tesco tag',
+        suggestion: 'Add a tag: "Only at Tesco" or "Available at Tesco"',
+        plainEnglish: 'Since you have a price or promotion tile, you need to add a Tesco tag to show where customers can find this offer.',
+        rule: 'Appendix A: Tag Rules',
       });
       return false;
     }
-    
-    removeComplianceIssue('people-confirm');
+
+    // If creative links to Tesco (has packshot = product for sale), tag is recommended
+    if (hasPackshot && !hasTag && !hasValueTile) {
+      addComplianceWarning({
+        id: 'tag-recommended',
+        type: 'tip',
+        severity: 'warning',
+        title: 'Consider Adding Tag',
+        message: 'Tesco-linked creatives should include a tag',
+        suggestion: 'Add: "Only at Tesco" (exclusive) or "Available at Tesco"',
+        rule: 'Appendix A: Tag Rules',
+      });
+      // This is just a tip, not a hard requirement
+    } else {
+      removeComplianceIssue('tag-recommended');
+    }
+
+    if (hasTag || !hasValueTile) {
+      removeComplianceIssue('tag-required-valuetile');
+    }
+
     return true;
   }, [canvas, addComplianceWarning, removeComplianceIssue]);
 
@@ -464,80 +780,109 @@ export const useCompliance = () => {
     clearCompliance();
     let errors = 0, warnings = 0;
 
-    // Check for Clubcard tile presence (affects tag validation)
-    const hasClubcardTile = canvas.getObjects().some(o => o.valueTileType === 'clubcard');
+    const objects = canvas.getObjects();
+    const valueTiles = objects.filter(o => o.isValueTile);
+    const tags = objects.filter(o => o.isTag);
 
-    canvas.getObjects().forEach((obj, idx) => {
+    objects.forEach((obj, idx) => {
       if (obj.isBackground || obj.isSafeZone) return;
 
       const objectId = obj.id || `obj-${idx}`;
-      const isSystemElement = obj.isValueTile || obj.isDrinkaware;
+      const isSystemElement = obj.isValueTile || obj.isDrinkaware || obj.isTag;
 
       // Text element checks
-      if (obj.type === 'i-text' || obj.type === 'text') {
+      if ((obj.type === 'i-text' || obj.type === 'text') && !isSystemElement) {
         const text = obj.text || '';
-        
-        if (!isSystemElement) {
-          // Copy rules (Hard Fail)
-          if (!checkProhibitedTerms(text, objectId)) errors++;
-          if (!checkClaims(text, objectId)) errors++;
-          if (!checkPriceText(text, objectId, obj.isValueTile)) errors++;
-          
-          // Accessibility rules (Hard Fail)
-          if (!checkFontSize(obj.fontSize || 16, objectId, isSystemElement)) errors++;
-          if (!checkContrast(obj.fill || '#000', null, objectId, obj.fontSize || 16, isSystemElement)) errors++;
-        }
-        
-        // Tag validation
-        if (obj.isTag) {
-          if (!checkTagText(text, objectId, hasClubcardTile)) errors++;
-        }
-        
-        // Safe zone (Hard Fail)
+        const fontSize = obj.fontSize || 16;
+        const isHeadline = fontSize >= 48;
+        const isSubhead = fontSize >= 24 && fontSize < 48;
+
+        // Copy rules
+        if (!checkProhibitedTerms(text, objectId)) errors++;
+        if (!checkClaims(text, objectId)) errors++;
+        if (!checkPriceText(text, objectId, false)) errors++;
+
+        // Length rules
+        if (!checkHeadlineLength(text, objectId, isHeadline)) errors++;
+        if (!checkSubheadWords(text, objectId, isSubhead)) errors++;
+
+        // Accessibility
+        if (!checkFontSize(fontSize, objectId, false)) errors++;
+        if (!checkContrast(obj.fill || '#000', null, objectId, fontSize, false)) errors++;
+
+        // Safe zone
         if (!checkSafeZone(obj)) errors++;
+
+        // Value tile overlap
+        if (!checkValueTileOverlap(obj, valueTiles)) errors++;
       }
 
-      // Logo safe zone check
-      if (obj.isLogo && !checkSafeZone(obj)) errors++;
-      
-      // Image checks
-      if (obj.type === 'image' && !obj.isBackground) {
-        if (!checkPeopleInImages()) warnings++;
+      // Tag validation
+      if (obj.isTag) {
+        const text = obj.text || '';
+        checkTagText(text, objectId);
       }
+
+      // Logo safe zone
+      if (obj.isLogo && !checkSafeZone(obj)) errors++;
+
+      // Packshot overlap with value tiles
+      if (obj.isPackshot && !checkValueTileOverlap(obj, valueTiles)) errors++;
     });
 
     // Global checks
     if (!checkDrinkaware()) errors++;
-    if (!checkValueTileOverlap()) errors++;
-    if (!checkPackshots()) warnings++;
-    
+    if (!checkClubcardTag()) warnings++;
+    if (!checkPackshots()) errors++;
+
+    // New compliance checks (CTA, value tile, packshot gap)
+    if (!checkCTAPosition()) errors++;
+    if (!checkPackshotCTAGap()) warnings++;
+    if (!checkValueTileSize()) warnings++;
+    if (!checkValueTilePosition()) warnings++;
+    if (!checkTagRequired()) warnings++;
+
     const required = checkRequiredElements();
-    warnings += required.errors;
+    warnings += required.warnings;
+
+    // Calculate score after all checks
+    calculateComplianceScore();
 
     return { errors, warnings };
   }, [
-    canvas, clearCompliance, 
-    checkProhibitedTerms, checkClaims, checkPriceText, checkTagText,
-    checkFontSize, checkContrast, checkSafeZone, 
-    checkDrinkaware, checkValueTileOverlap, checkPackshots,
-    checkRequiredElements, checkPeopleInImages
+    canvas, clearCompliance, calculateComplianceScore,
+    checkProhibitedTerms, checkClaims, checkPriceText,
+    checkHeadlineLength, checkSubheadWords,
+    checkFontSize, checkContrast, checkSafeZone,
+    checkValueTileOverlap, checkTagText,
+    checkDrinkaware, checkClubcardTag, checkPackshots,
+    checkRequiredElements, checkCTAPosition, checkPackshotCTAGap,
+    checkValueTileSize, checkValueTilePosition, checkTagRequired
   ]);
 
   return {
     checkProhibitedTerms,
     checkClaims,
     checkPriceText,
+    checkHeadlineLength,
+    checkSubheadWords,
     checkTagText,
+    checkValueTileOverlap,
     checkFontSize,
     checkContrast,
     checkSafeZone,
     checkDrinkaware,
-    checkValueTileOverlap,
+    checkClubcardTag,
     checkPackshots,
     checkRequiredElements,
-    checkPeopleInImages,
+    checkCTAPosition,
+    checkPackshotCTAGap,
+    checkValueTileSize,
+    checkValueTilePosition,
+    checkTagRequired,
     runFullCompliance,
   };
 };
 
 export default useCompliance;
+
