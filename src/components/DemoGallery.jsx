@@ -275,6 +275,9 @@ const DEMO_CREATIVES = [
     },
 ];
 
+// Export for use in sidebar gallery
+export { DEMO_CREATIVES };
+
 export function DemoGallery({ onClose, onApply }) {
     const [selectedDemo, setSelectedDemo] = useState(0);
     const [selectedVariant, setSelectedVariant] = useState(0);
@@ -341,44 +344,104 @@ export function DemoGallery({ onClose, onApply }) {
             });
             canvas.add(subheadline);
 
-            // Add value tile
-            const tiles = {
-                new: { bg: '#e51c23', text: '#ffffff', w: 120, h: 50, label: 'NEW' },
-                white: { bg: '#ffffff', text: '#003d7a', w: 160, h: 60, border: '#003d7a', label: currentVariantData.price || '£9.99' },
-                clubcard: { bg: '#003d7a', text: '#ffffff', w: 200, h: 80, label: `${currentVariantData.price || '£1.99'}\nwas ${currentVariantData.wasPrice || '£2.99'}` },
-            };
-            const tileConfig = tiles[currentVariantData.priceType] || tiles.clubcard;
+            // Add value tile - using exact same logic as Sidebar's addValueTile
+            // VALUE_TILES definition matches Sidebar.jsx line 29-33
+            const VALUE_TILES = [
+                { id: 'new', name: 'NEW', bg: '#e51c23', text: '#ffffff', w: 120, h: 50, fontSize: 28, editable: false },
+                { id: 'white', name: 'White', bg: '#ffffff', text: '#003d7a', w: 160, h: 60, fontSize: 24, editable: 'price', border: '#003d7a' },
+                { id: 'clubcard', name: 'Clubcard', bg: '#003d7a', text: '#ffffff', w: 200, h: 80, fontSize: 20, editable: 'prices' },
+            ];
 
+            const tile = VALUE_TILES.find(t => t.id === currentVariantData.priceType) || VALUE_TILES[2];
+            const formatConfig = targetFormat.config || { valueTileScale: 1.0 };
+            let tileScale = formatConfig.valueTileScale || 1.0;
+
+            // Robust fallback: ensure scale is correct for known formats if config is missing
+            if (tileScale === 1.0 && currentFormat === 'instagram-feed') tileScale = 1.5;
+            if (tileScale === 1.0 && currentFormat === 'instagram-story') tileScale = 1.8;
+            if (tileScale === 1.0 && currentFormat === 'facebook-feed') tileScale = 1.2;
+            if (tileScale === 1.0 && currentFormat === 'facebook-story') tileScale = 1.8;
+
+            // Fixed position based on tile type (predefined positions per compliance)
+            // Same as Sidebar.jsx lines 452-463
+            let tilePositions = {
+                'new': { x: targetFormat.width * 0.15, y: targetFormat.height - (60 * tileScale) },
+                'white': { x: targetFormat.width * 0.5, y: targetFormat.height - (60 * tileScale) },
+                'clubcard': { x: targetFormat.width * 0.5, y: targetFormat.height - (60 * tileScale) },
+            };
+
+            // If horizontal layout, adjust positions
+            if (formatConfig.layout === 'horizontal') {
+                tilePositions.new = { x: targetFormat.width * 0.85, y: targetFormat.height * 0.25 };
+                tilePositions.white = { x: targetFormat.width * 0.85, y: targetFormat.height * 0.5 };
+                tilePositions.clubcard = { x: targetFormat.width * 0.85, y: targetFormat.height * 0.5 };
+            }
+
+            const pos = tilePositions[tile.id] || { x: targetFormat.width / 2, y: targetFormat.height - (100 * tileScale) };
+
+            // Create tile rect - exact same as Sidebar.jsx lines 467-489
             const tileRect = new Rect({
-                width: tileConfig.w,
-                height: tileConfig.h,
-                fill: tileConfig.bg,
-                rx: 6,
-                ry: 6,
-                stroke: tileConfig.border || null,
-                strokeWidth: tileConfig.border ? 2 : 0,
+                width: tile.w * tileScale,
+                height: tile.h * tileScale,
+                fill: tile.bg,
+                rx: 4 * tileScale,
+                ry: 4 * tileScale,
+                stroke: tile.border || null,
+                strokeWidth: tile.border ? (2 * tileScale) : 0,
                 originX: 'center',
                 originY: 'center',
-                left: targetFormat.width / 2,
-                top: targetFormat.height * layout.tileY,
+                left: pos.x,
+                top: pos.y,
+                // Locked - cannot be moved per compliance
+                selectable: false,
+                evented: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                hasBorders: false,
                 isValueTile: true,
-                valueTileType: currentVariantData.priceType,
-                customName: 'Value Tile',
+                valueTileType: tile.id,
+                customName: tile.name,
             });
-            canvas.add(tileRect);
 
-            const tileText = new IText(tileConfig.label, {
-                fontSize: currentVariantData.priceType === 'clubcard' ? 22 : 26,
+            // Prepare display text based on tile type
+            let displayText = tile.name;
+            if (tile.id === 'white') displayText = currentVariantData.price || '£2.50';
+            if (tile.id === 'clubcard') displayText = `${currentVariantData.price || '£1.50'}\nwas ${currentVariantData.wasPrice || '£2.00'}`;
+
+            // Text editability depends on tile type per compliance
+            const isEditable = tile.id !== 'new';
+
+            // Create tile text - exact same as Sidebar.jsx lines 501-522
+            const tileText = new IText(displayText, {
+                fontSize: tile.fontSize * tileScale,
                 fontWeight: 'bold',
                 fontFamily: 'Inter, sans-serif',
-                fill: tileConfig.text,
+                fill: tile.text,
                 originX: 'center',
                 originY: 'center',
-                left: targetFormat.width / 2,
-                top: targetFormat.height * layout.tileY,
+                left: pos.x,
+                top: pos.y,
                 textAlign: 'center',
+                // Editable for price tiles, but position is still locked
+                selectable: isEditable,
+                evented: isEditable,
+                editable: isEditable,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
                 isValueTile: true,
+                valueTileType: tile.id,
+                customName: `${tile.name} Text`,
             });
+
+            canvas.add(tileRect);
             canvas.add(tileText);
 
             // Handle alcohol products
@@ -399,8 +462,19 @@ export function DemoGallery({ onClose, onApply }) {
                 canvas.add(drinkRect, drinkText);
             }
 
-            // Add tag
-            const tag = new IText('Only at Tesco', {
+            // Add tag - must have correct format based on tile type
+            // For Clubcard tiles: must include end date per compliance rules
+            let tagText = 'Only at Tesco';
+            if (currentVariantData.priceType === 'clubcard') {
+                // Generate a demo end date (2 weeks from now)
+                const endDate = new Date();
+                endDate.setDate(endDate.getDate() + 14);
+                const dd = String(endDate.getDate()).padStart(2, '0');
+                const mm = String(endDate.getMonth() + 1).padStart(2, '0');
+                tagText = `Clubcard/app required. Ends ${dd}/${mm}`;
+            }
+
+            const tag = new IText(tagText, {
                 left: targetFormat.width / 2,
                 top: targetFormat.height - 50,
                 originX: 'center',

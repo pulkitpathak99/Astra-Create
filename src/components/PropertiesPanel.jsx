@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState } from 'react';
-import useStore, { FORMAT_PRESETS, COMPLIANCE_RULES } from '../store/useStore';
-import useCompliance from '../hooks/useCompliance';
+import useStore, { FORMAT_PRESETS } from '../store/useStore';
+import useCompliance, { COMPLIANCE_RULES } from '../hooks/useCompliance';
 
 export function PropertiesPanel() {
     const {

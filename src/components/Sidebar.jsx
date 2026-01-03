@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { FabricImage, IText, Rect } from 'fabric';
-import useStore, { TEMPLATE_LIBRARY, FORMAT_PRESETS } from '../store/useStore';
+import { FabricImage, IText, Rect, Circle, Triangle, Line, Ellipse, Polygon, Path } from 'fabric';
+import useStore, { TEMPLATE_LIBRARY, FORMAT_PRESETS, CREATIVE_PROFILES } from '../store/useStore';
 import { removeBackground } from '../utils/imageProcessing';
 import geminiService from '../services/geminiService';
 import backgroundRemovalService from '../services/backgroundRemovalService';
 import { addToCanvas, safeHistorySave, getPackshotCount as getPackshotCountHelper } from '../utils/canvasHelpers';
+import { DEMO_CREATIVES } from './DemoGallery';
 
 // Icon components
 const Icons = {
@@ -13,9 +14,9 @@ const Icons = {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
         </svg>
     ),
-    templates: (
+    gallery: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
     ),
     ai: (
@@ -31,6 +32,59 @@ const VALUE_TILES = [
     { id: 'white', name: 'White', bg: '#ffffff', text: '#003d7a', w: 160, h: 60, fontSize: 24, editable: 'price', border: '#003d7a' },
     { id: 'clubcard', name: 'Clubcard', bg: '#003d7a', text: '#ffffff', w: 200, h: 80, fontSize: 20, editable: 'prices' },
 ];
+
+// Comprehensive Shapes Library
+const SHAPE_LIBRARY = {
+    basic: [
+        { id: 'rectangle', name: 'Rectangle', icon: '▢', type: 'rect' },
+        { id: 'rounded-rect', name: 'Rounded Rectangle', icon: '▢', type: 'rect', rx: 20, ry: 20 },
+        { id: 'circle', name: 'Circle', icon: '●', type: 'circle' },
+        { id: 'ellipse', name: 'Ellipse', icon: '⬭', type: 'ellipse' },
+        { id: 'triangle', name: 'Triangle', icon: '▲', type: 'triangle' },
+        { id: 'diamond', name: 'Diamond', icon: '◆', type: 'polygon', points: 4, rotation: 45 },
+    ],
+    advanced: [
+        { id: 'star-5', name: '5-Point Star', icon: '★', type: 'star', points: 5 },
+        { id: 'star-6', name: '6-Point Star', icon: '✡', type: 'star', points: 6 },
+        { id: 'hexagon', name: 'Hexagon', icon: '⬡', type: 'polygon', points: 6 },
+        { id: 'pentagon', name: 'Pentagon', icon: '⬠', type: 'polygon', points: 5 },
+        { id: 'octagon', name: 'Octagon', icon: '⯃', type: 'polygon', points: 8 },
+        { id: 'heart', name: 'Heart', icon: '❤', type: 'path', pathId: 'heart' },
+    ],
+    decorative: [
+        { id: 'badge', name: 'Badge', icon: '🏷️', type: 'path', pathId: 'badge' },
+        { id: 'burst', name: 'Starburst', icon: '💥', type: 'star', points: 12, innerRadius: 0.4 },
+        { id: 'arrow-right', name: 'Arrow Right', icon: '➡', type: 'path', pathId: 'arrow-right' },
+        { id: 'arrow-left', name: 'Arrow Left', icon: '⬅', type: 'path', pathId: 'arrow-left' },
+        { id: 'chevron', name: 'Chevron', icon: '❯', type: 'path', pathId: 'chevron' },
+        { id: 'banner', name: 'Banner', icon: '🎗️', type: 'path', pathId: 'banner' },
+    ],
+    lines: [
+        { id: 'line', name: 'Line', icon: '─', type: 'line' },
+        { id: 'line-thick', name: 'Thick Line', icon: '━', type: 'line', strokeWidth: 8 },
+        { id: 'line-dashed', name: 'Dashed Line', icon: '┅', type: 'line', strokeDashArray: [10, 5] },
+        { id: 'line-dotted', name: 'Dotted Line', icon: '┈', type: 'line', strokeDashArray: [3, 3] },
+    ],
+};
+
+// Default shape properties
+const DEFAULT_SHAPE_PROPS = {
+    fill: '#003d7a',
+    stroke: '#ffffff',
+    strokeWidth: 0,
+    opacity: 1,
+};
+
+// SVG Paths for complex shapes
+const SHAPE_PATHS = {
+    heart: 'M 50 30 C 50 25 45 20 40 20 C 30 20 25 30 25 35 C 25 55 50 70 50 70 C 50 70 75 55 75 35 C 75 30 70 20 60 20 C 55 20 50 25 50 30 Z',
+    badge: 'M 50 5 L 60 20 L 80 20 L 65 35 L 70 55 L 50 45 L 30 55 L 35 35 L 20 20 L 40 20 Z',
+    'arrow-right': 'M 10 40 L 60 40 L 60 25 L 90 50 L 60 75 L 60 60 L 10 60 Z',
+    'arrow-left': 'M 90 40 L 40 40 L 40 25 L 10 50 L 40 75 L 40 60 L 90 60 Z',
+    chevron: 'M 30 20 L 60 50 L 30 80 L 40 80 L 70 50 L 40 20 Z',
+    banner: 'M 10 20 L 90 20 L 85 50 L 90 80 L 10 80 L 15 50 Z',
+};
+
 
 export function Sidebar() {
     const fileInputRef = useRef(null);
@@ -61,10 +115,20 @@ export function Sidebar() {
     const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
     const [pendingTemplate, setPendingTemplate] = useState(null);
 
+    // Shape customization state
+    const [shapeFill, setShapeFill] = useState('#003d7a');
+    const [shapeStroke, setShapeStroke] = useState('#ffffff');
+    const [shapeStrokeWidth, setShapeStrokeWidth] = useState(0);
+    const [shapeOpacity, setShapeOpacity] = useState(1);
+    const [expandedShapeCategory, setExpandedShapeCategory] = useState('basic');
+
+
     const {
         canvas, savedColors, addSavedColor,
         backgroundColor, setBackgroundColor,
         isAlcoholProduct, setIsAlcoholProduct,
+        isLEPMode, setIsLEPMode,
+        creativeProfile, setCreativeProfile,
         saveToHistory, updateLayers, setCurrentFormat,
         currentFormat,
         // Processing state (centralized)
@@ -78,6 +142,77 @@ export function Sidebar() {
     const aiLoading = processingState.operation === 'ai-generation';
     const uploadingLogo = processingState.operation === 'logo-upload';
 
+    // Creative Profile helpers
+    const currentProfileConfig = CREATIVE_PROFILES[creativeProfile] || CREATIVE_PROFILES.STANDARD;
+
+    const isToolDisabled = (toolId) => {
+        return currentProfileConfig.disabledTools.includes(toolId);
+    };
+
+    const isValueTileAllowed = (tileId) => {
+        return currentProfileConfig.constraints.valueTiles.allowed.includes(tileId);
+    };
+
+    // Apply profile constraints to canvas
+    const applyProfileConstraints = (profileId) => {
+        const profile = CREATIVE_PROFILES[profileId];
+        if (!profile || !canvas) return;
+
+        // Lock background if required
+        if (profile.constraints.background.locked) {
+            canvas.backgroundColor = profile.constraints.background.value;
+            setBackgroundColor(profile.constraints.background.value);
+        }
+
+        // Update text colors if locked
+        if (profile.constraints.textColor.locked) {
+            canvas.getObjects().forEach(obj => {
+                if (obj.type === 'i-text' || obj.type === 'text') {
+                    obj.set('fill', profile.constraints.textColor.value);
+                }
+            });
+        }
+
+        // Auto-add required tag if specified
+        if (profile.autoTag) {
+            const existingTag = canvas.getObjects().find(o => o.isTag || o.isLEPTag);
+            if (!existingTag) {
+                const format = FORMAT_PRESETS[currentFormat];
+                // Position tag at very bottom to avoid overlapping with value tiles
+                const tagY = format.height - 25;
+                const tag = new IText(profile.autoTag, {
+                    left: format.width / 2,
+                    top: tagY,
+                    originX: 'center',
+                    originY: 'center',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 20, // Minimum accessible font size
+                    fill: profile.id === 'LOW_EVERYDAY_PRICE' ? '#666666' : '#ffffff',
+                    textAlign: 'center',
+                    isTag: true,
+                    isLEPTag: profile.id === 'LOW_EVERYDAY_PRICE',
+                    customName: 'LEP Tag',
+                    // Lock position but allow editing
+                    lockMovementX: true,
+                    lockMovementY: true,
+                    lockRotation: true,
+                    lockScalingX: true,
+                    lockScalingY: true,
+                });
+                canvas.add(tag);
+            }
+        }
+
+        canvas.renderAll();
+        saveToHistory();
+        updateLayers();
+    };
+
+    // Handle profile change
+    const handleProfileChange = (profileId) => {
+        setCreativeProfile(profileId);
+        applyProfileConstraints(profileId);
+    };
 
     const getPackshotCount = () => canvas?.getObjects().filter(o => o.isPackshot).length || 0;
 
@@ -404,6 +539,10 @@ export function Sidebar() {
         const format = FORMAT_PRESETS[currentFormat];
         const config = format.config || { headlineFontSize: 48, subFontSize: 32 };
 
+        // Get current profile from store (avoid stale closure)
+        const currentProfile = useStore.getState().creativeProfile;
+        const profileConfig = CREATIVE_PROFILES[currentProfile] || CREATIVE_PROFILES.STANDARD;
+
         const presets = {
             heading: { text: 'Your Headline', size: config.headlineFontSize, weight: 'bold', y: 0.3 },
             subheading: { text: 'Subheading text', size: config.subFontSize, weight: '500', y: 0.42 },
@@ -411,15 +550,26 @@ export function Sidebar() {
         };
         const p = presets[type];
 
+        // Use profile's locked text color if applicable, otherwise default
+        const textColor = profileConfig.constraints.textColor.locked
+            ? profileConfig.constraints.textColor.value
+            : '#000000';
+
+        // Use profile's locked text alignment if applicable
+        const textAlign = profileConfig.constraints.textAlignment?.locked
+            ? profileConfig.constraints.textAlignment.value
+            : 'center';
+
         const text = new IText(p.text, {
-            left: format.width / 2,
+            left: textAlign === 'left' ? 50 : format.width / 2,
             top: format.height * p.y,
-            originX: 'center',
+            originX: textAlign === 'left' ? 'left' : 'center',
             originY: 'center',
             fontFamily: 'Inter, sans-serif',
             fontSize: p.size,
             fontWeight: p.weight,
-            fill: '#000000',
+            fill: textColor,
+            textAlign: textAlign,
             customName: type.charAt(0).toUpperCase() + type.slice(1),
         });
 
@@ -428,6 +578,142 @@ export function Sidebar() {
         canvas.renderAll();
         saveToHistory();
         updateLayers();
+    };
+
+    // Shape handler - comprehensive shape creation
+    const addShape = (shapeConfig) => {
+        if (!canvas) return;
+        const format = FORMAT_PRESETS[currentFormat];
+
+        const baseProps = {
+            left: format.width / 2,
+            top: format.height / 2,
+            originX: 'center',
+            originY: 'center',
+            fill: shapeFill,
+            stroke: shapeStroke,
+            strokeWidth: shapeStrokeWidth,
+            opacity: shapeOpacity,
+            customName: shapeConfig.name,
+            isShape: true,
+        };
+
+        let shape;
+        const size = Math.min(format.width, format.height) * 0.15; // Default size relative to canvas
+
+        switch (shapeConfig.type) {
+            case 'rect':
+                shape = new Rect({
+                    ...baseProps,
+                    width: size * 1.5,
+                    height: size,
+                    rx: shapeConfig.rx || 0,
+                    ry: shapeConfig.ry || 0,
+                });
+                break;
+
+            case 'circle':
+                shape = new Circle({
+                    ...baseProps,
+                    radius: size / 2,
+                });
+                break;
+
+            case 'ellipse':
+                shape = new Ellipse({
+                    ...baseProps,
+                    rx: size * 0.75,
+                    ry: size * 0.5,
+                });
+                break;
+
+            case 'triangle':
+                shape = new Triangle({
+                    ...baseProps,
+                    width: size,
+                    height: size,
+                });
+                break;
+
+            case 'polygon': {
+                // Create regular polygon with specified number of points
+                const points = shapeConfig.points || 6;
+                const radius = size / 2;
+                const polygonPoints = [];
+                const angleOffset = shapeConfig.rotation ? (shapeConfig.rotation * Math.PI / 180) : -Math.PI / 2;
+
+                for (let i = 0; i < points; i++) {
+                    const angle = (2 * Math.PI * i / points) + angleOffset;
+                    polygonPoints.push({
+                        x: radius * Math.cos(angle),
+                        y: radius * Math.sin(angle),
+                    });
+                }
+
+                shape = new Polygon(polygonPoints, {
+                    ...baseProps,
+                });
+                break;
+            }
+
+            case 'star': {
+                // Create star shape with inner and outer radius
+                const points = shapeConfig.points || 5;
+                const outerRadius = size / 2;
+                const innerRadius = outerRadius * (shapeConfig.innerRadius || 0.5);
+                const starPoints = [];
+
+                for (let i = 0; i < points * 2; i++) {
+                    const angle = (Math.PI * i / points) - Math.PI / 2;
+                    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                    starPoints.push({
+                        x: radius * Math.cos(angle),
+                        y: radius * Math.sin(angle),
+                    });
+                }
+
+                shape = new Polygon(starPoints, {
+                    ...baseProps,
+                });
+                break;
+            }
+
+            case 'path': {
+                // Create complex path shapes from SVG path data
+                const pathData = SHAPE_PATHS[shapeConfig.pathId];
+                if (pathData) {
+                    shape = new Path(pathData, {
+                        ...baseProps,
+                        scaleX: size / 100,
+                        scaleY: size / 100,
+                    });
+                }
+                break;
+            }
+
+            case 'line': {
+                const lineLength = size * 2;
+                shape = new Line([0, 0, lineLength, 0], {
+                    ...baseProps,
+                    fill: null,
+                    stroke: shapeFill, // Use fill color for line stroke
+                    strokeWidth: shapeConfig.strokeWidth || 4,
+                    strokeDashArray: shapeConfig.strokeDashArray || null,
+                });
+                break;
+            }
+
+            default:
+                return;
+        }
+
+        if (shape) {
+            canvas.add(shape);
+            canvas.setActiveObject(shape);
+            canvas.renderAll();
+            saveToHistory();
+            updateLayers();
+        }
     };
 
     // Value tile handler
@@ -447,11 +733,12 @@ export function Sidebar() {
         }
 
         // Fixed position based on tile type (predefined positions per compliance)
-        // Value tiles go at the bottom of the canvas
+        // Value tiles go near the bottom, but above the tag area (last 50px reserved for tag)
+        const tileY = format.height - (80 * scale) - 30; // Leave space for tag
         const tilePositions = {
-            'new': { x: format.width * 0.15, y: format.height - (60 * scale) },
-            'white': { x: format.width * 0.5, y: format.height - (60 * scale) },
-            'clubcard': { x: format.width * 0.5, y: format.height - (60 * scale) },
+            'new': { x: format.width * 0.15, y: tileY },
+            'white': { x: format.width * 0.5, y: tileY },
+            'clubcard': { x: format.width * 0.5, y: tileY },
         };
 
         // If horizontal layout, adjust positions
@@ -461,7 +748,7 @@ export function Sidebar() {
             tilePositions.clubcard = { x: format.width * 0.85, y: format.height * 0.5 };
         }
 
-        const pos = tilePositions[tile.id] || { x: format.width / 2, y: format.height - (100 * scale) };
+        const pos = tilePositions[tile.id] || { x: format.width / 2, y: tileY };
 
         const rect = new Rect({
             width: tile.w * scale,
@@ -601,20 +888,168 @@ export function Sidebar() {
         }
     };
 
-    const applyTemplate = (template) => {
+    const applyTemplate = (template, formatAlreadySet = false) => {
         if (!canvas) return;
         setShowTemplateConfirm(false);
         setPendingTemplate(null);
 
-        if (template.format !== currentFormat) {
+        // If format needs to change and hasn't been set yet, change format first
+        if (template.format !== currentFormat && !formatAlreadySet) {
             setCurrentFormat(template.format);
-            setTimeout(() => applyTemplate(template), 100);
+            // Re-call with flag to indicate format has been updated
+            setTimeout(() => applyTemplate(template, true), 150);
             return;
         }
 
-        const format = FORMAT_PRESETS[currentFormat];
+        // Get the format (use template's format since currentFormat might not be updated yet)
+        const format = FORMAT_PRESETS[template.format];
+        if (!format) return;
+
         canvas.getObjects().forEach(obj => { if (!obj.isSafeZone) canvas.remove(obj); });
         canvas.backgroundColor = template.elements[0]?.props?.fill || '#ffffff';
+        canvas.renderAll();
+        saveToHistory();
+        updateLayers();
+    };
+
+    // Apply demo creative to canvas
+    const applyDemoCreative = (demo, variantIndex = 0) => {
+        if (!canvas) return;
+
+        const variant = demo.variants[variantIndex];
+        if (!variant) return;
+
+        const format = FORMAT_PRESETS[currentFormat];
+
+        // Clear canvas
+        canvas.getObjects().forEach(obj => { if (!obj.isSafeZone) canvas.remove(obj); });
+
+        // Set background
+        canvas.backgroundColor = variant.backgroundColor;
+        setBackgroundColor(variant.backgroundColor);
+
+        // Add headline
+        const headline = new IText(variant.headline, {
+            left: format.width / 2,
+            top: format.height * 0.25,
+            originX: 'center',
+            originY: 'center',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: format.config?.headlineFontSize || 72,
+            fontWeight: 'bold',
+            fill: variant.headlineColor,
+            textAlign: 'center',
+            customName: 'Headline',
+        });
+        canvas.add(headline);
+
+        // Add subheadline
+        const subheadline = new IText(variant.subheadline, {
+            left: format.width / 2,
+            top: format.height * 0.38,
+            originX: 'center',
+            originY: 'center',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: format.config?.subFontSize || 36,
+            fill: variant.headlineColor,
+            opacity: 0.8,
+            textAlign: 'center',
+            customName: 'Subheadline',
+        });
+        canvas.add(subheadline);
+
+        // Add value tile based on priceType
+        const tileConfig = VALUE_TILES.find(t => t.id === variant.priceType) || VALUE_TILES[0];
+        const tileScale = format.config?.valueTileScale || 1.0;
+        const tilePos = { x: format.width / 2, y: format.height - (80 * tileScale) };
+
+        const tileRect = new Rect({
+            width: tileConfig.w * tileScale,
+            height: tileConfig.h * tileScale,
+            fill: tileConfig.bg,
+            rx: 4 * tileScale,
+            ry: 4 * tileScale,
+            stroke: tileConfig.border || null,
+            strokeWidth: tileConfig.border ? (2 * tileScale) : 0,
+            originX: 'center',
+            originY: 'center',
+            left: tilePos.x,
+            top: tilePos.y,
+            selectable: false,
+            evented: false,
+            isValueTile: true,
+            valueTileType: tileConfig.id,
+            customName: tileConfig.name,
+        });
+
+        let displayText = tileConfig.name;
+        if (tileConfig.id === 'white') displayText = variant.price || '£2.50';
+        if (tileConfig.id === 'clubcard') displayText = `${variant.price || '£1.50'}\nwas ${variant.wasPrice || '£2.00'}`;
+
+        const tileText = new IText(displayText, {
+            fontSize: tileConfig.fontSize * tileScale,
+            fontWeight: 'bold',
+            fontFamily: 'Inter, sans-serif',
+            fill: tileConfig.text,
+            originX: 'center',
+            originY: 'center',
+            left: tilePos.x,
+            top: tilePos.y,
+            textAlign: 'center',
+            selectable: tileConfig.id !== 'new',
+            evented: tileConfig.id !== 'new',
+            isValueTile: true,
+            valueTileType: tileConfig.id,
+            customName: `${tileConfig.name} Text`,
+        });
+
+        canvas.add(tileRect);
+        canvas.add(tileText);
+
+        // Add Drinkaware for alcohol products
+        if (demo.product.isAlcohol) {
+            setIsAlcoholProduct(true);
+            const drinkRect = new Rect({
+                width: 180, height: 28, fill: '#ffffff', rx: 4, ry: 4,
+                originX: 'center', originY: 'center',
+                left: format.width - 100, top: format.height - 40,
+                isDrinkaware: true, customName: 'Drinkaware',
+                selectable: false, evented: false,
+            });
+            const drinkText = new IText('drinkaware.co.uk', {
+                fontSize: 14, fontFamily: 'Inter, sans-serif', fill: '#000000',
+                originX: 'center', originY: 'center',
+                left: format.width - 100, top: format.height - 40,
+                isDrinkaware: true, editable: false,
+            });
+            canvas.add(drinkRect, drinkText);
+        }
+
+        // Add tag
+        let tagText = 'Only at Tesco';
+        if (variant.priceType === 'clubcard') {
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() + 14);
+            const dd = String(endDate.getDate()).padStart(2, '0');
+            const mm = String(endDate.getMonth() + 1).padStart(2, '0');
+            tagText = `Clubcard/app required. Ends ${dd}/${mm}`;
+        }
+
+        const tag = new IText(tagText, {
+            left: format.width / 2,
+            top: format.height - 30,
+            originX: 'center',
+            originY: 'center',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 14,
+            fill: '#ffffff',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            padding: 8,
+            isTag: true,
+            customName: 'Tesco Tag',
+        });
+        canvas.add(tag);
+
         canvas.renderAll();
         saveToHistory();
         updateLayers();
@@ -800,10 +1235,313 @@ export function Sidebar() {
                             </div>
                         </div>
 
+                        {/* Shapes */}
+                        <div className="section">
+                            <div className="section-header">
+                                <span className="section-title">Shapes</span>
+                                <span className="badge badge-info">New</span>
+                            </div>
+
+                            {/* Shape Customization Controls */}
+                            <div className="mb-4 p-3 rounded-lg bg-[var(--surface-overlay)] border border-[var(--border-subtle)]">
+                                <p className="text-[10px] text-muted uppercase tracking-wide mb-3">Customize</p>
+
+                                {/* Fill Color */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-secondary">Fill</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            value={shapeFill}
+                                            onChange={(e) => setShapeFill(e.target.value)}
+                                            className="w-7 h-7 rounded cursor-pointer border border-[var(--border-subtle)]"
+                                        />
+                                        <span className="text-[10px] text-muted font-mono">{shapeFill}</span>
+                                    </div>
+                                </div>
+
+                                {/* Stroke Color */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-secondary">Stroke</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            value={shapeStroke}
+                                            onChange={(e) => setShapeStroke(e.target.value)}
+                                            className="w-7 h-7 rounded cursor-pointer border border-[var(--border-subtle)]"
+                                        />
+                                        <span className="text-[10px] text-muted font-mono">{shapeStroke}</span>
+                                    </div>
+                                </div>
+
+                                {/* Stroke Width */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-secondary">Stroke Width</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="20"
+                                            value={shapeStrokeWidth}
+                                            onChange={(e) => setShapeStrokeWidth(Number(e.target.value))}
+                                            className="w-16 h-1 accent-[var(--accent-primary)]"
+                                        />
+                                        <span className="text-[10px] text-muted w-6 text-right">{shapeStrokeWidth}px</span>
+                                    </div>
+                                </div>
+
+                                {/* Opacity */}
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-secondary">Opacity</span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min="0.1"
+                                            max="1"
+                                            step="0.1"
+                                            value={shapeOpacity}
+                                            onChange={(e) => setShapeOpacity(Number(e.target.value))}
+                                            className="w-16 h-1 accent-[var(--accent-primary)]"
+                                        />
+                                        <span className="text-[10px] text-muted w-8 text-right">{Math.round(shapeOpacity * 100)}%</span>
+                                    </div>
+                                </div>
+
+                                {/* Quick Color Presets */}
+                                <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                                    <p className="text-[10px] text-muted mb-2">Quick Colors</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {['#003d7a', '#e51c23', '#ffffff', '#ffd700', '#00a650', '#000000', '#ff9800', '#9c27b0'].map(color => (
+                                            <button
+                                                key={color}
+                                                onClick={() => setShapeFill(color)}
+                                                className={`w-6 h-6 rounded border-2 transition-all hover:scale-110 ${shapeFill === color ? 'border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/30' : 'border-[var(--border-subtle)]'}`}
+                                                style={{ backgroundColor: color }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Shape Categories */}
+                            <div className="space-y-2">
+                                {/* Basic Shapes */}
+                                <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+                                    <button
+                                        onClick={() => setExpandedShapeCategory(expandedShapeCategory === 'basic' ? null : 'basic')}
+                                        className="w-full flex items-center justify-between p-2.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] transition-all"
+                                    >
+                                        <span className="text-xs font-medium text-primary flex items-center gap-2">
+                                            <span>🔷</span> Basic Shapes
+                                        </span>
+                                        <span className={`text-muted transition-transform ${expandedShapeCategory === 'basic' ? 'rotate-180' : ''}`}>▼</span>
+                                    </button>
+                                    {expandedShapeCategory === 'basic' && (
+                                        <div className="grid grid-cols-3 gap-1.5 p-2 bg-[var(--surface-base)]">
+                                            {SHAPE_LIBRARY.basic.map(shape => (
+                                                <button
+                                                    key={shape.id}
+                                                    onClick={() => addShape(shape)}
+                                                    className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] transition-all group"
+                                                    title={shape.name}
+                                                >
+                                                    <span className="text-xl group-hover:scale-110 transition-transform" style={{ color: shapeFill }}>{shape.icon}</span>
+                                                    <span className="text-[9px] text-muted mt-1 truncate w-full text-center">{shape.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Advanced Shapes */}
+                                <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+                                    <button
+                                        onClick={() => setExpandedShapeCategory(expandedShapeCategory === 'advanced' ? null : 'advanced')}
+                                        className="w-full flex items-center justify-between p-2.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] transition-all"
+                                    >
+                                        <span className="text-xs font-medium text-primary flex items-center gap-2">
+                                            <span>⭐</span> Advanced Shapes
+                                        </span>
+                                        <span className={`text-muted transition-transform ${expandedShapeCategory === 'advanced' ? 'rotate-180' : ''}`}>▼</span>
+                                    </button>
+                                    {expandedShapeCategory === 'advanced' && (
+                                        <div className="grid grid-cols-3 gap-1.5 p-2 bg-[var(--surface-base)]">
+                                            {SHAPE_LIBRARY.advanced.map(shape => (
+                                                <button
+                                                    key={shape.id}
+                                                    onClick={() => addShape(shape)}
+                                                    className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] transition-all group"
+                                                    title={shape.name}
+                                                >
+                                                    <span className="text-xl group-hover:scale-110 transition-transform" style={{ color: shapeFill }}>{shape.icon}</span>
+                                                    <span className="text-[9px] text-muted mt-1 truncate w-full text-center">{shape.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Decorative Shapes */}
+                                <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+                                    <button
+                                        onClick={() => setExpandedShapeCategory(expandedShapeCategory === 'decorative' ? null : 'decorative')}
+                                        className="w-full flex items-center justify-between p-2.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] transition-all"
+                                    >
+                                        <span className="text-xs font-medium text-primary flex items-center gap-2">
+                                            <span>🎨</span> Decorative
+                                        </span>
+                                        <span className={`text-muted transition-transform ${expandedShapeCategory === 'decorative' ? 'rotate-180' : ''}`}>▼</span>
+                                    </button>
+                                    {expandedShapeCategory === 'decorative' && (
+                                        <div className="grid grid-cols-3 gap-1.5 p-2 bg-[var(--surface-base)]">
+                                            {SHAPE_LIBRARY.decorative.map(shape => (
+                                                <button
+                                                    key={shape.id}
+                                                    onClick={() => addShape(shape)}
+                                                    className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] transition-all group"
+                                                    title={shape.name}
+                                                >
+                                                    <span className="text-xl group-hover:scale-110 transition-transform">{shape.icon}</span>
+                                                    <span className="text-[9px] text-muted mt-1 truncate w-full text-center">{shape.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Lines */}
+                                <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+                                    <button
+                                        onClick={() => setExpandedShapeCategory(expandedShapeCategory === 'lines' ? null : 'lines')}
+                                        className="w-full flex items-center justify-between p-2.5 bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] transition-all"
+                                    >
+                                        <span className="text-xs font-medium text-primary flex items-center gap-2">
+                                            <span>➖</span> Lines & Dividers
+                                        </span>
+                                        <span className={`text-muted transition-transform ${expandedShapeCategory === 'lines' ? 'rotate-180' : ''}`}>▼</span>
+                                    </button>
+                                    {expandedShapeCategory === 'lines' && (
+                                        <div className="grid grid-cols-2 gap-1.5 p-2 bg-[var(--surface-base)]">
+                                            {SHAPE_LIBRARY.lines.map(shape => (
+                                                <button
+                                                    key={shape.id}
+                                                    onClick={() => addShape(shape)}
+                                                    className="flex flex-col items-center justify-center p-2.5 rounded-lg bg-[var(--surface-elevated)] hover:bg-[var(--surface-overlay)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] transition-all group"
+                                                    title={shape.name}
+                                                >
+                                                    <span className="text-xl group-hover:scale-110 transition-transform" style={{ color: shapeFill }}>{shape.icon}</span>
+                                                    <span className="text-[9px] text-muted mt-1">{shape.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Creative Profile Selector */}
+                        <div className="section">
+                            <div className="section-header">
+                                <span className="section-title">Creative Profile</span>
+                                <span className={`badge ${creativeProfile === 'LOW_EVERYDAY_PRICE' ? 'badge-warning' : creativeProfile === 'CLUBCARD' ? 'badge-info' : 'badge-success'}`}>
+                                    {currentProfileConfig.name}
+                                </span>
+                            </div>
+                            <p className="text-xs text-muted mb-3">
+                                Profile determines constraints and required elements
+                            </p>
+
+                            {/* Profile Cards */}
+                            <div className="space-y-2">
+                                {Object.values(CREATIVE_PROFILES).map(profile => (
+                                    <button
+                                        key={profile.id}
+                                        onClick={() => handleProfileChange(profile.id)}
+                                        className={`w-full p-3 rounded-lg border-2 transition-all text-left ${creativeProfile === profile.id
+                                            ? profile.id === 'LOW_EVERYDAY_PRICE'
+                                                ? 'bg-[#00539F]/10 border-[#00539F]'
+                                                : profile.id === 'CLUBCARD'
+                                                    ? 'bg-[#003d7a]/10 border-[#003d7a]'
+                                                    : 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]'
+                                            : 'bg-[var(--surface-elevated)] border-[var(--border-subtle)] hover:border-[var(--border-default)]'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${creativeProfile === profile.id
+                                                ? profile.id === 'LOW_EVERYDAY_PRICE'
+                                                    ? 'bg-[#00539F] text-white'
+                                                    : profile.id === 'CLUBCARD'
+                                                        ? 'bg-[#003d7a] text-white'
+                                                        : 'bg-[var(--accent-primary)] text-white'
+                                                : 'bg-[var(--surface-overlay)]'
+                                                }`}>
+                                                {profile.icon}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className={`font-semibold text-sm ${creativeProfile === profile.id ? 'text-primary' : 'text-secondary'}`}>
+                                                    {profile.name}
+                                                </div>
+                                                <div className="text-[10px] text-muted">
+                                                    {profile.description}
+                                                </div>
+                                            </div>
+                                            {creativeProfile === profile.id && (
+                                                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                                    <span className="text-white text-xs">✓</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Active Profile Constraints */}
+                            {creativeProfile !== 'STANDARD' && (
+                                <div className={`mt-3 p-3 rounded-lg border ${creativeProfile === 'LOW_EVERYDAY_PRICE'
+                                    ? 'bg-[#00539F]/5 border-[#00539F]/20'
+                                    : 'bg-[#003d7a]/5 border-[#003d7a]/20'
+                                    }`}>
+                                    <p className={`text-xs font-medium mb-2 ${creativeProfile === 'LOW_EVERYDAY_PRICE' ? 'text-[#00539F]' : 'text-[#003d7a]'
+                                        }`}>
+                                        ✓ Active Constraints
+                                    </p>
+                                    <ul className="text-[11px] text-muted space-y-1">
+                                        {currentProfileConfig.constraints.background.locked && (
+                                            <li className="flex items-center gap-1.5">
+                                                <span className="w-3 h-3 rounded" style={{ backgroundColor: currentProfileConfig.constraints.background.value, border: '1px solid #ccc' }}></span>
+                                                Background locked to {currentProfileConfig.constraints.background.value}
+                                            </li>
+                                        )}
+                                        {currentProfileConfig.constraints.textColor.locked && (
+                                            <li className="flex items-center gap-1.5">
+                                                <span className="w-3 h-3 rounded" style={{ backgroundColor: currentProfileConfig.constraints.textColor.value }}></span>
+                                                Text color: {currentProfileConfig.constraints.textColor.value}
+                                            </li>
+                                        )}
+                                        {currentProfileConfig.constraints.textAlignment.locked && (
+                                            <li>• Text alignment: {currentProfileConfig.constraints.textAlignment.value}</li>
+                                        )}
+                                        <li>• Value tiles: {currentProfileConfig.constraints.valueTiles.allowed.join(', ')}</li>
+                                        {currentProfileConfig.autoTag && (
+                                            <li>• Auto-tag: "{currentProfileConfig.autoTag}"</li>
+                                        )}
+                                        {currentProfileConfig.disabledTools.length > 0 && (
+                                            <li className="text-amber-400">• {currentProfileConfig.disabledTools.length} tools disabled</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Value Tiles - Simplified Click-to-Add */}
                         <div className="section">
                             <div className="section-header">
                                 <span className="section-title">Value Tiles</span>
+                                {creativeProfile !== 'STANDARD' && (
+                                    <span className="badge badge-info text-[9px]">
+                                        {currentProfileConfig.constraints.valueTiles.allowed.length} allowed
+                                    </span>
+                                )}
                             </div>
                             <p className="text-xs text-muted mb-3">Click to add to canvas</p>
 
@@ -811,28 +1549,54 @@ export function Sidebar() {
                                 {/* NEW Tile */}
                                 <button
                                     onClick={() => addValueTile(VALUE_TILES[0])}
-                                    className="flex items-center justify-center p-4 rounded-lg bg-[#e51c23] hover:bg-[#c41820] text-white font-bold text-lg transition-all hover:scale-[1.02] shadow-lg"
+                                    disabled={!isValueTileAllowed('new')}
+                                    className={`flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all shadow-lg ${isValueTileAllowed('new')
+                                        ? 'bg-[#e51c23] hover:bg-[#c41820] text-white hover:scale-[1.02]'
+                                        : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
+                                        }`}
                                 >
                                     NEW
+                                    {!isValueTileAllowed('new') && <span className="ml-2 text-xs">🔒</span>}
                                 </button>
 
                                 {/* Price Tile */}
                                 <button
                                     onClick={() => addValueTile(VALUE_TILES[1])}
-                                    className="flex items-center justify-center p-4 rounded-lg bg-white border-2 border-[#003d7a] text-[#003d7a] font-bold text-lg transition-all hover:scale-[1.02] hover:shadow-lg"
+                                    disabled={!isValueTileAllowed('white')}
+                                    className={`flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all ${isValueTileAllowed('white')
+                                        ? 'bg-white border-2 border-[#003d7a] text-[#003d7a] hover:scale-[1.02] hover:shadow-lg'
+                                        : 'bg-gray-500/30 border-2 border-gray-500/30 text-gray-500 cursor-not-allowed'
+                                        }`}
                                 >
                                     {whitePrice || '£2.50'}
+                                    {!isValueTileAllowed('white') && <span className="ml-2 text-xs">🔒</span>}
                                 </button>
 
                                 {/* Clubcard Tile */}
                                 <button
                                     onClick={() => addValueTile(VALUE_TILES[2])}
-                                    className="flex flex-col items-center justify-center p-4 rounded-lg bg-[#003d7a] text-white font-bold transition-all hover:scale-[1.02] shadow-lg"
+                                    disabled={!isValueTileAllowed('clubcard')}
+                                    className={`flex flex-col items-center justify-center p-4 rounded-lg font-bold transition-all shadow-lg ${isValueTileAllowed('clubcard')
+                                        ? 'bg-[#003d7a] text-white hover:scale-[1.02]'
+                                        : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
+                                        }`}
                                 >
-                                    <span className="text-lg">{clubcardPrice || '£1.50'}</span>
+                                    <span className="text-lg flex items-center">
+                                        {clubcardPrice || '£1.50'}
+                                        {!isValueTileAllowed('clubcard') && <span className="ml-2 text-xs">🔒</span>}
+                                    </span>
                                     <span className="text-xs font-normal opacity-70">was {clubcardRegular || '£2.00'}</span>
                                 </button>
                             </div>
+
+                            {/* Profile Restriction Notice */}
+                            {creativeProfile !== 'STANDARD' && (
+                                <div className="mt-2 p-2 rounded bg-[var(--surface-overlay)] border border-[var(--border-subtle)]">
+                                    <p className="text-[10px] text-muted">
+                                        <span className="text-amber-400">ℹ️</span> {currentProfileConfig.name} profile only allows: <strong>{currentProfileConfig.constraints.valueTiles.allowed.join(', ')}</strong> tiles
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Quick Edit Inputs */}
                             <div className="mt-3 p-3 rounded-lg bg-white/5 border border-white/10">
@@ -844,6 +1608,7 @@ export function Sidebar() {
                                         onChange={(e) => setWhitePrice(e.target.value)}
                                         className="input input-sm text-center"
                                         placeholder="£2.50"
+                                        disabled={!isValueTileAllowed('white')}
                                     />
                                     <input
                                         type="text"
@@ -851,6 +1616,7 @@ export function Sidebar() {
                                         onChange={(e) => setClubcardPrice(e.target.value)}
                                         className="input input-sm text-center"
                                         placeholder="£1.50"
+                                        disabled={!isValueTileAllowed('clubcard')}
                                     />
                                     <input
                                         type="text"
@@ -858,6 +1624,7 @@ export function Sidebar() {
                                         onChange={(e) => setClubcardRegular(e.target.value)}
                                         className="input input-sm text-center"
                                         placeholder="£2.00"
+                                        disabled={!isValueTileAllowed('clubcard')}
                                     />
                                 </div>
                             </div>
@@ -868,23 +1635,22 @@ export function Sidebar() {
                             <div className="section-header">
                                 <span className="section-title">Tags</span>
                                 {/* Smart indicator when tag is needed */}
-                                {canvas?.getObjects().some(o => o.isValueTile || o.isPackshot) && 
-                                 !canvas?.getObjects().some(o => o.isTag) && (
-                                    <span className="badge badge-warning animate-pulse">Required</span>
-                                )}
+                                {canvas?.getObjects().some(o => o.isValueTile || o.isPackshot) &&
+                                    !canvas?.getObjects().some(o => o.isTag) && (
+                                        <span className="badge badge-warning animate-pulse">Required</span>
+                                    )}
                             </div>
-                            
+
                             {/* Tesco Tag Type Selection */}
                             <div className="space-y-2 mb-3">
                                 <p className="text-xs text-muted">Select tag type:</p>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={() => setIsExclusive(true)}
-                                        className={`p-2.5 rounded-lg text-xs font-medium transition-all border ${
-                                            isExclusive 
-                                                ? 'bg-[var(--accent-primary)]/20 border-[var(--accent-primary)] text-[var(--accent-primary)]' 
-                                                : 'bg-[var(--surface-elevated)] border-[var(--border-subtle)] text-secondary hover:border-[var(--border-default)]'
-                                        }`}
+                                        className={`p-2.5 rounded-lg text-xs font-medium transition-all border ${isExclusive
+                                            ? 'bg-[var(--accent-primary)]/20 border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                                            : 'bg-[var(--surface-elevated)] border-[var(--border-subtle)] text-secondary hover:border-[var(--border-default)]'
+                                            }`}
                                     >
                                         <div className="flex flex-col items-center gap-1">
                                             <span>⭐</span>
@@ -893,11 +1659,10 @@ export function Sidebar() {
                                     </button>
                                     <button
                                         onClick={() => setIsExclusive(false)}
-                                        className={`p-2.5 rounded-lg text-xs font-medium transition-all border ${
-                                            !isExclusive 
-                                                ? 'bg-[var(--accent-primary)]/20 border-[var(--accent-primary)] text-[var(--accent-primary)]' 
-                                                : 'bg-[var(--surface-elevated)] border-[var(--border-subtle)] text-secondary hover:border-[var(--border-default)]'
-                                        }`}
+                                        className={`p-2.5 rounded-lg text-xs font-medium transition-all border ${!isExclusive
+                                            ? 'bg-[var(--accent-primary)]/20 border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                                            : 'bg-[var(--surface-elevated)] border-[var(--border-subtle)] text-secondary hover:border-[var(--border-default)]'
+                                            }`}
                                     >
                                         <div className="flex flex-col items-center gap-1">
                                             <span>🏪</span>
@@ -939,8 +1704,8 @@ export function Sidebar() {
                                     <div className="px-3 py-1.5 rounded text-xs font-medium bg-black/70 text-white">
                                         {canvas?.getObjects().some(o => o.valueTileType === 'clubcard') && clubcardEndDate
                                             ? `Clubcard/app required. Ends ${clubcardEndDate}`
-                                            : isExclusive 
-                                                ? 'Only at Tesco' 
+                                            : isExclusive
+                                                ? 'Only at Tesco'
                                                 : 'Available at Tesco'
                                         }
                                     </div>
@@ -948,8 +1713,8 @@ export function Sidebar() {
                             </div>
 
                             {/* Add Tag Button */}
-                            <button 
-                                onClick={addTag} 
+                            <button
+                                onClick={addTag}
                                 className="btn btn-primary w-full text-xs flex items-center justify-center gap-2"
                             >
                                 <span>🏷️</span>
@@ -965,33 +1730,56 @@ export function Sidebar() {
                         </div>
 
                         {/* Background */}
-                        <div className="section">
+                        <div className={`section ${isToolDisabled('background-picker') ? 'opacity-60' : ''}`}>
                             <div className="section-header">
                                 <span className="section-title">Background</span>
+                                {isToolDisabled('background-picker') && (
+                                    <span className="badge badge-warning text-[9px]">🔒 Locked</span>
+                                )}
                             </div>
-                            <input type="file" ref={bgInputRef} accept="image/*" className="hidden" onChange={handleBackgroundUpload} />
-                            <button onClick={() => bgInputRef.current?.click()} className="btn btn-secondary w-full text-xs mb-2" disabled={isProcessing}>
-                                {isProcessing ? '⏳' : '🖼️'} Upload Image
-                            </button>
-                            <div className="flex flex-wrap gap-2">
-                                {savedColors.map((color, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => { setBackgroundColor(color); addSavedColor(color); }}
-                                        className={`color-swatch ${backgroundColor === color ? 'active' : ''}`}
-                                        style={{ backgroundColor: color }}
-                                    />
-                                ))}
-                                <div className="relative">
-                                    <input
-                                        type="color"
-                                        value={backgroundColor}
-                                        onChange={(e) => { setBackgroundColor(e.target.value); addSavedColor(e.target.value); }}
-                                        className="w-7 h-7 opacity-0 absolute inset-0 cursor-pointer"
-                                    />
-                                    <div className="color-swatch border-2 border-dashed border-[var(--border-default)] flex items-center justify-center text-muted text-sm">+</div>
+
+                            {isToolDisabled('background-picker') ? (
+                                <div className="p-3 rounded-lg bg-[var(--surface-overlay)] border border-amber-500/30">
+                                    <p className="text-xs text-amber-400 mb-2">
+                                        ⚠️ Background is locked by {currentProfileConfig.name} profile
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <div
+                                            className="w-8 h-8 rounded border-2 border-amber-500/50"
+                                            style={{ backgroundColor: currentProfileConfig.constraints.background.value }}
+                                        />
+                                        <span className="text-xs text-muted">
+                                            {currentProfileConfig.constraints.background.value}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <>
+                                    <input type="file" ref={bgInputRef} accept="image/*" className="hidden" onChange={handleBackgroundUpload} />
+                                    <button onClick={() => bgInputRef.current?.click()} className="btn btn-secondary w-full text-xs mb-2" disabled={isProcessing}>
+                                        {isProcessing ? '⏳' : '🖼️'} Upload Image
+                                    </button>
+                                    <div className="flex flex-wrap gap-2">
+                                        {savedColors.map((color, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => { setBackgroundColor(color); addSavedColor(color); }}
+                                                className={`color-swatch ${backgroundColor === color ? 'active' : ''}`}
+                                                style={{ backgroundColor: color }}
+                                            />
+                                        ))}
+                                        <div className="relative">
+                                            <input
+                                                type="color"
+                                                value={backgroundColor}
+                                                onChange={(e) => { setBackgroundColor(e.target.value); addSavedColor(e.target.value); }}
+                                                className="w-7 h-7 opacity-0 absolute inset-0 cursor-pointer"
+                                            />
+                                            <div className="color-swatch border-2 border-dashed border-[var(--border-default)] flex items-center justify-center text-muted text-sm">+</div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Alcohol */}
@@ -1009,31 +1797,113 @@ export function Sidebar() {
                     </div>
                 );
 
-            case 'templates':
+            case 'gallery':
                 return (
-                    <div className="animate-fade-in">
-                        <div className="grid grid-cols-2 gap-2">
-                            {TEMPLATE_LIBRARY.map(t => (
-                                <button
-                                    key={t.id}
-                                    onClick={() => requestTemplateApply(t)}
-                                    className="card aspect-square relative overflow-hidden group hover:border-[var(--accent-primary)] transition-all"
-                                >
-                                    <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: t.elements[0]?.props?.fill || '#ccc' }}>
-                                        <span className="text-2xl opacity-60">
-                                            {t.category === 'Promotion' && '🏷️'}
-                                            {t.category === 'Launch' && '🚀'}
-                                            {t.category === 'Value' && '💰'}
-                                            {t.category === 'Story' && '📱'}
-                                            {t.category === 'Clubcard' && '💳'}
-                                            {t.category === 'Facebook' && '👍'}
-                                        </span>
+                    <div className="animate-fade-in space-y-4">
+                        {/* AI Gallery Header */}
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">✨</span>
+                                <span className="text-xs font-semibold text-purple-300">AI-Generated Creatives</span>
+                            </div>
+                            <p className="text-[11px] text-muted">
+                                {DEMO_CREATIVES.length} product campaigns ready to apply. Click to use.
+                            </p>
+                        </div>
+
+                        {/* Demo Creatives Grid */}
+                        <div className="space-y-3">
+                            {DEMO_CREATIVES.map(demo => (
+                                <div key={demo.id} className="rounded-xl border border-[var(--border-subtle)] overflow-hidden bg-[var(--surface-elevated)]">
+                                    {/* Product Header */}
+                                    <div className="p-3 border-b border-[var(--border-subtle)]">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg">
+                                                    {demo.product.category === 'Food & Drink' && '🥤'}
+                                                    {demo.product.category === 'Alcohol' && '🍺'}
+                                                    {demo.product.category === 'Baby' && '👶'}
+                                                    {demo.product.category === 'Household' && '🧹'}
+                                                    {demo.product.category === 'Fresh' && '🍓'}
+                                                    {demo.product.category === 'Bakery' && '🍞'}
+                                                    {demo.product.category === 'Frozen' && '🍦'}
+                                                    {demo.product.category === 'Pet' && '🐕'}
+                                                </span>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-primary truncate">{demo.product.name}</p>
+                                                    <p className="text-[10px] text-muted">{demo.product.brand} • {demo.product.category}</p>
+                                                </div>
+                                            </div>
+                                            {demo.product.isAlcohol && (
+                                                <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-medium">18+</span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
-                                        <p className="text-[10px] font-medium text-white truncate">{t.name}</p>
+
+                                    {/* Variants Grid */}
+                                    <div className="p-2 grid grid-cols-3 gap-1.5">
+                                        {demo.variants.map((variant, vIdx) => (
+                                            <button
+                                                key={vIdx}
+                                                onClick={() => applyDemoCreative(demo, vIdx)}
+                                                className="aspect-square rounded-lg overflow-hidden relative group hover:ring-2 hover:ring-purple-500 transition-all"
+                                                style={{ backgroundColor: variant.backgroundColor }}
+                                                title={variant.headline}
+                                            >
+                                                {/* AI Badge */}
+                                                <div className="absolute top-1 right-1 z-10">
+                                                    <span className="text-[6px] bg-purple-500/80 text-white px-1 py-0.5 rounded-full font-medium">
+                                                        AI
+                                                    </span>
+                                                </div>
+
+                                                {/* Preview Content */}
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center p-1.5 text-center">
+                                                    <p
+                                                        className="text-[8px] font-bold leading-tight truncate w-full"
+                                                        style={{ color: variant.headlineColor }}
+                                                    >
+                                                        {variant.headline}
+                                                    </p>
+
+                                                    {/* Price Indicator */}
+                                                    <div
+                                                        className="mt-1 px-1 py-0.5 rounded text-[7px] font-semibold"
+                                                        style={{
+                                                            backgroundColor: variant.priceType === 'clubcard' ? '#003d7a' :
+                                                                variant.priceType === 'new' ? '#e51c23' : '#ffffff',
+                                                            color: variant.priceType === 'white' ? '#003d7a' : '#ffffff',
+                                                        }}
+                                                    >
+                                                        {variant.priceType === 'new' && 'NEW'}
+                                                        {variant.priceType === 'white' && variant.price}
+                                                        {variant.priceType === 'clubcard' && variant.price}
+                                                    </div>
+                                                </div>
+
+                                                {/* Hover Overlay */}
+                                                <div className="absolute inset-0 bg-purple-500/0 group-hover:bg-purple-500/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                    <span className="text-white text-xs font-medium">Apply</span>
+                                                </div>
+                                            </button>
+                                        ))}
                                     </div>
-                                </button>
+
+                                    {/* Stats */}
+                                    <div className="px-3 py-2 bg-[var(--surface-overlay)] flex items-center justify-between text-[9px] text-muted">
+                                        <span>⚡ {demo.generationTime}s gen</span>
+                                        <span>📐 {demo.variants.length} variants</span>
+                                        <span className="text-green-400">✓ Compliant</span>
+                                    </div>
+                                </div>
                             ))}
+                        </div>
+
+                        {/* Tip */}
+                        <div className="p-2 rounded-lg bg-[var(--surface-overlay)] border border-[var(--border-subtle)]">
+                            <p className="text-[10px] text-muted text-center">
+                                💡 All creatives include proper tags, value tiles, and compliance elements
+                            </p>
                         </div>
                     </div>
                 );
@@ -1105,7 +1975,7 @@ export function Sidebar() {
             <nav className="icon-rail">
                 {[
                     { id: 'elements', icon: Icons.elements, label: 'Elements' },
-                    { id: 'templates', icon: Icons.templates, label: 'Templates' },
+                    { id: 'gallery', icon: Icons.gallery, label: 'AI Gallery' },
                     { id: 'ai', icon: Icons.ai, label: 'AI Copy' },
                 ].map(tab => (
                     <button
@@ -1124,7 +1994,7 @@ export function Sidebar() {
                 <div className="sidebar-header">
                     <h2>{
                         activeTab === 'elements' ? 'Elements' :
-                            activeTab === 'templates' ? 'Templates' : 'AI Copy'
+                            activeTab === 'gallery' ? 'AI Creative Gallery' : 'AI Copy'
                     }</h2>
                 </div>
                 <div className="sidebar-content">

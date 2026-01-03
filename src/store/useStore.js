@@ -39,6 +39,70 @@ export const FORMAT_PRESETS = {
     },
 };
 
+// Creative Profiles - Mode-based constraint system
+export const CREATIVE_PROFILES = {
+    STANDARD: {
+        id: 'STANDARD',
+        name: 'Standard',
+        icon: '🎨',
+        description: 'Full creative freedom with compliance guidance',
+        constraints: {
+            background: { locked: false },
+            textColor: { locked: false },
+            textAlignment: { locked: false },
+            valueTiles: { allowed: ['new', 'white', 'clubcard'] },
+        },
+        requiredElements: [],
+        autoTag: null,
+        disabledTools: [],
+        styles: {
+            textColor: null, // User chooses
+            backgroundColor: null,
+            fontFamily: 'Inter, sans-serif',
+        },
+    },
+    LOW_EVERYDAY_PRICE: {
+        id: 'LOW_EVERYDAY_PRICE',
+        name: 'Low Everyday Price',
+        icon: '💰',
+        description: 'Strict trade-style design for value products',
+        constraints: {
+            background: { locked: true, value: '#ffffff' },
+            textColor: { locked: true, value: '#00539F' },
+            textAlignment: { locked: true, value: 'left' },
+            valueTiles: { allowed: ['white'] },
+        },
+        requiredElements: ['lep-tag', 'lep-logo'],
+        autoTag: 'Selected stores. While stocks last',
+        disabledTools: ['background-picker', 'background-image', 'text-color', 'text-alignment', 'value-tile-new', 'value-tile-clubcard'],
+        styles: {
+            textColor: '#00539F', // Tesco Blue
+            backgroundColor: '#ffffff',
+            fontFamily: 'Inter, sans-serif', // Tesco Modern fallback
+        },
+    },
+    CLUBCARD: {
+        id: 'CLUBCARD',
+        name: 'Clubcard Exclusive',
+        icon: '💳',
+        description: 'Clubcard member pricing campaigns',
+        constraints: {
+            background: { locked: false },
+            textColor: { locked: false },
+            textAlignment: { locked: false },
+            valueTiles: { allowed: ['clubcard'] },
+        },
+        requiredElements: ['clubcard-tag', 'clubcard-tile'],
+        autoTag: null, // Tag format depends on end date
+        disabledTools: ['value-tile-new', 'value-tile-white'],
+        styles: {
+            textColor: null,
+            backgroundColor: null,
+            fontFamily: 'Inter, sans-serif',
+            accentColor: '#003d7a', // Clubcard blue
+        },
+    },
+};
 // Template Library
 export const TEMPLATE_LIBRARY = [
     {
@@ -470,6 +534,30 @@ export const useStore = create((set, get) => ({
     setIsAlcoholProduct: (val) => set({ isAlcoholProduct: val }),
     productCategory: 'general',
     setProductCategory: (cat) => set({ productCategory: cat }),
+
+    // Creative Profile (replaces isLEPMode)
+    creativeProfile: 'STANDARD',
+    setCreativeProfile: (profileId) => {
+        const profile = CREATIVE_PROFILES[profileId];
+        if (!profile) return;
+        
+        set({ creativeProfile: profileId });
+        
+        // If profile locks background, update backgroundColor
+        if (profile.constraints.background.locked) {
+            set({ backgroundColor: profile.constraints.background.value });
+        }
+    },
+    
+    // Backward compatibility getter (derived from creativeProfile)
+    isLEPMode: false, // Will be computed in components via: creativeProfile === 'LOW_EVERYDAY_PRICE'
+    setIsLEPMode: (val) => {
+        // Legacy support - maps boolean to profile
+        set({ 
+            creativeProfile: val ? 'LOW_EVERYDAY_PRICE' : 'STANDARD',
+            isLEPMode: val 
+        });
+    },
 
     // Compliance tracking
     complianceErrors: [],

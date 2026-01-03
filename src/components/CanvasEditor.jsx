@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas, Rect } from 'fabric';
-import useStore, { FORMAT_PRESETS, COMPLIANCE_RULES } from '../store/useStore';
+import useStore, { FORMAT_PRESETS } from '../store/useStore';
+import { COMPLIANCE_RULES } from '../hooks/useCompliance';
 import { CanvasControls } from './CanvasControls';
 
 export function CanvasEditor({ onOpenWizard }) {
