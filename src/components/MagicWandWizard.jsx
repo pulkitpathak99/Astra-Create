@@ -4,6 +4,9 @@ import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import useStore, { FORMAT_PRESETS } from '../store/useStore';
 import geminiService, { validateCompliance } from '../services/geminiService';
+import { generateCreativeSpec } from '../services/creativeSpecService';
+import { filterCreativeSpec } from '../services/creativeComplianceFilter';
+import { buildCompliantCanvas, addPackshotToCanvas } from '../services/compliantTemplateBuilder';
 
 /**
  * Magic Wand Wizard - One-click autonomous creative generation
@@ -45,6 +48,7 @@ export function MagicWandWizard({ onClose, onComplete }) {
     };
 
     // Generate creative variants from the uploaded image
+    // Pipeline: User Input → AI Creative Spec → Compliance Filter → Canvas Build → Export
     const handleGenerate = useCallback(async () => {
         if (!imageDataUrl) return;
 
@@ -54,25 +58,41 @@ export function MagicWandWizard({ onClose, onComplete }) {
         setError(null);
 
         try {
+            // STEP 1: AI Creative Spec Generation
             setStatus('🔍 Analyzing product image...');
             setProgress(10);
 
-            // Call the autonomous generation with user prompt
-            const result = await geminiService.generateAutonomousCreative(imageDataUrl, {
+            // Generate creative spec (AI focused on creativity, no compliance in prompt)
+            const rawSpec = await generateCreativeSpec(imageDataUrl, {
                 userPrompt: userPrompt.trim(),
-                mood: 'modern' // Could also make this selectable
+                mood: 'modern'
             });
 
-            setProgress(80);
-            setStatus('✨ Finalizing variants...');
+            if (!rawSpec.success) {
+                throw new Error('Creative generation failed');
+            }
 
-            if (!result.success) {
-                throw new Error('Generation failed');
+            setProgress(50);
+
+            // STEP 2: Compliance Filter
+            setStatus('🛡️ Checking compliance...');
+            setProgress(60);
+
+            // Run compliance filter on all variants
+            const filteredSpec = filterCreativeSpec(rawSpec);
+
+            setProgress(80);
+
+            // Show compliance summary
+            const summary = filteredSpec.complianceSummary;
+            if (summary.modifiedVariants > 0) {
+                setStatus(`✓ ${summary.modifiedVariants} variant(s) auto-fixed for compliance`);
+            } else {
+                setStatus('✨ All variants compliant!');
             }
 
             setProgress(100);
-            setStatus('✅ Complete!');
-            setGeneratedData(result);
+            setGeneratedData(filteredSpec);
             setStep(3);
         } catch (err) {
             console.error('Magic wand generation failed:', err);
@@ -81,132 +101,38 @@ export function MagicWandWizard({ onClose, onComplete }) {
         } finally {
             setGenerating(false);
         }
-    }, [imageDataUrl]);
+    }, [imageDataUrl, userPrompt]);
 
-    // Apply selected variant to canvas
+    // Apply selected variant to canvas using COMPLIANT TEMPLATE
+    // Uses the same layout structure as AI Creative Gallery for 100% compliance
     const applyToCanvas = useCallback(async () => {
         if (!canvas || !generatedData) return;
 
         setGenerating(true);
-        setStatus('🎨 Building your creative...');
+        setStatus('🎨 Building compliant creative...');
 
         const variant = generatedData.variants[selectedVariant];
-        const format = FORMAT_PRESETS[currentFormat];
-        const config = format.config || {
-            valueTileScale: 1.0,
-            headlineFontSize: 48,
-            subFontSize: 32,
-            packshotScale: 0.4,
-            layout: 'vertical'
-        };
-        const layout = variant.layout || {
-            packshot: { x: 0.5, y: 0.5, scale: 1.0 },
-            headline: { x: 0.5, y: 0.25, align: 'center' },
-            subheadline: { x: 0.5, y: 0.35, align: 'center' },
-            valueTile: { x: 0.5, y: 0.8 },
-            tag: { x: 0.5, y: 0.95 }
-        };
-        const isHorizontal = config.layout === 'horizontal';
+        const product = generatedData.product;
 
         try {
-            // Clear canvas (keep safe zones)
-            canvas.getObjects().forEach(obj => {
-                if (!obj.isSafeZone) canvas.remove(obj);
-            });
+            // Use compliant template builder (same as AI Gallery)
+            await buildCompliantCanvas(
+                canvas,
+                variant,
+                product,
+                currentFormat,
+                {
+                    setBackgroundColor,
+                    setIsAlcoholProduct,
+                    saveToHistory,
+                    updateLayers
+                }
+            );
 
-            // Set background
-            canvas.backgroundColor = variant.backgroundColor;
-            setBackgroundColor(variant.backgroundColor);
-
-            // Add packshot (the uploaded image)
-            if (imageDataUrl) {
-                const img = new Image();
-                img.onload = () => {
-                    // Use dynamic layout config
-                    const layoutConfig = layout.packshot || { x: 0.5, y: 0.5, scale: 1.0 };
-
-                    // Calculate scale based on format size and layout scale
-                    const baseScale = Math.min(format.width, format.height) / Math.max(img.width, img.height);
-                    // Use layout scale (default 1.0) * base scale * config multiplier (0.5 typically)
-                    const finalScale = baseScale * (layoutConfig.scale || 1.0) * (isHorizontal ? 0.8 : 0.5);
-
-                    const fabricImg = new FabricImage(img, {
-                        left: format.width * (layoutConfig.x !== undefined ? layoutConfig.x : 0.5),
-                        top: format.height * (layoutConfig.y !== undefined ? layoutConfig.y : 0.5),
-                        scaleX: finalScale,
-                        scaleY: finalScale,
-                        originX: 'center',
-                        originY: 'center',
-                        customName: 'Product Packshot',
-                        isPackshot: true,
-                        isLeadPackshot: true,
-                    });
-                    canvas.add(fabricImg);
-                    canvas.renderAll();
-                };
-                img.src = imageDataUrl;
+            // Add packshot if available (not demo mode)
+            if (imageDataUrl && imageDataUrl !== 'demo') {
+                await addPackshotToCanvas(canvas, imageDataUrl, currentFormat);
             }
-
-            // Add headline
-            const headlineConfig = layout.headline || { x: 0.5, y: 0.25, align: 'center' };
-            const headline = new IText(variant.headline, {
-                left: format.width * (headlineConfig.x !== undefined ? headlineConfig.x : 0.5),
-                top: format.height * (headlineConfig.y !== undefined ? headlineConfig.y : 0.25),
-                originX: headlineConfig.align === 'left' ? 'left' : (headlineConfig.align === 'right' ? 'right' : 'center'),
-                originY: 'center',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: config.headlineFontSize * (isHorizontal ? 0.8 : 1.0), // Adjust for horizontal
-                fontWeight: 'bold',
-                fill: variant.headlineColor,
-                textAlign: headlineConfig.align || 'center',
-                customName: 'AI Headline',
-                width: format.width * (headlineConfig.width || 0.9),
-                splitByGrapheme: false,
-            });
-            canvas.add(headline);
-
-            // Add subheadline
-            if (variant.subheadline) {
-                const subConfig = layout.subheadline || { x: 0.5, y: 0.35, align: 'center' };
-                const subheadline = new IText(variant.subheadline, {
-                    left: format.width * (subConfig.x !== undefined ? subConfig.x : 0.5),
-                    top: format.height * (subConfig.y !== undefined ? subConfig.y : 0.35),
-                    originX: subConfig.align === 'left' ? 'left' : (subConfig.align === 'right' ? 'right' : 'center'),
-                    originY: 'center',
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: config.subFontSize * (isHorizontal ? 0.8 : 1.0),
-                    fontWeight: '500',
-                    fill: variant.headlineColor,
-                    textAlign: subConfig.align || 'center',
-                    opacity: 0.9,
-                    customName: 'AI Subheadline',
-                    width: format.width * (subConfig.width || 0.8),
-                });
-                canvas.add(subheadline);
-            }
-
-            // Add value tile based on variant.priceType
-            const tileConfig = layout.valueTile || { x: 0.5, y: 0.8 };
-            const tileX = format.width * (tileConfig.x !== undefined ? tileConfig.x : 0.5);
-            const tileY = format.height * (tileConfig.y !== undefined ? tileConfig.y : 0.8);
-
-            addValueTile(variant.priceType, tileX, tileY, format, variant);
-
-            // Handle alcohol products
-            if (generatedData.isAlcohol) {
-                setIsAlcoholProduct(true);
-                addDrinkaware(format);
-            }
-
-            // Add tag
-            const tagConfig = layout.tag || { x: 0.5, y: 0.95 };
-            const tagX = format.width * (tagConfig.x !== undefined ? tagConfig.x : 0.5);
-            const tagY = format.height * (tagConfig.y !== undefined ? tagConfig.y : 0.95);
-            addTag(variant.tag || 'Only at Tesco', tagX, tagY, format, isHorizontal);
-
-            canvas.renderAll();
-            saveToHistory();
-            updateLayers();
 
             setGenerating(false);
             onComplete?.({
@@ -223,102 +149,6 @@ export function MagicWandWizard({ onClose, onComplete }) {
     }, [canvas, generatedData, selectedVariant, currentFormat, imageDataUrl,
         setBackgroundColor, setIsAlcoholProduct, saveToHistory, updateLayers, onComplete, onClose]);
 
-    // Helper: Add value tile
-    const addValueTile = (type, posX, posY, format, variant) => {
-        const tiles = {
-            new: { bg: '#e51c23', text: '#ffffff', w: 120, h: 50, label: 'NEW' },
-            white: { bg: '#ffffff', text: '#003d7a', w: 160, h: 60, border: '#003d7a', label: '£2.99' },
-            clubcard: { bg: '#003d7a', text: '#ffffff', w: 200, h: 80, label: '£1.99\nwas £2.99' },
-        };
-        const config = tiles[type] || tiles.clubcard;
-        const formatConfig = format.config || { valueTileScale: 1.0 };
-        const scale = formatConfig.valueTileScale;
-
-        const rect = new Rect({
-            width: config.w * scale,
-            height: config.h * scale,
-            fill: config.bg,
-            rx: 6 * scale,
-            ry: 6 * scale,
-            stroke: config.border || null,
-            strokeWidth: config.border ? (2 * scale) : 0,
-            originX: 'center',
-            originY: 'center',
-            left: posX,
-            top: posY,
-            selectable: true,
-            isValueTile: true,
-            valueTileType: type,
-            customName: `${type} Value Tile`,
-        });
-
-        const text = new IText(config.label, {
-            fontSize: (type === 'clubcard' ? 22 : 26) * scale,
-            fontWeight: 'bold',
-            fontFamily: 'Inter, sans-serif',
-            fill: config.text,
-            originX: 'center',
-            originY: 'center',
-            left: posX,
-            top: posY,
-            textAlign: 'center',
-            isValueTile: true,
-            valueTileType: type,
-        });
-
-        canvas.add(rect, text);
-    };
-
-    // Helper: Add Drinkaware lockup
-    const addDrinkaware = (format) => {
-        const rect = new Rect({
-            width: 180,
-            height: 28,
-            fill: '#ffffff',
-            rx: 4,
-            ry: 4,
-            originX: 'center',
-            originY: 'center',
-            left: format.width - 100,
-            top: format.height - 40,
-            isDrinkaware: true,
-            isSystemElement: true,
-            customName: 'Drinkaware',
-        });
-        const text = new IText('drinkaware.co.uk', {
-            fontSize: 14,
-            fontFamily: 'Inter, sans-serif',
-            fill: '#000000',
-            originX: 'center',
-            originY: 'center',
-            left: format.width - 100,
-            top: format.height - 40,
-            editable: false,
-            isDrinkaware: true,
-            isSystemElement: true,
-        });
-        canvas.add(rect, text);
-    };
-
-
-
-    // Helper: Add Tesco tag
-    const addTag = (tagText, tagX, tagY, format, isHorizontal) => {
-        const tag = new IText(tagText, {
-            left: tagX,
-            top: tagY,
-            originX: 'center',
-            originY: 'center',
-            fontFamily: 'Inter, sans-serif',
-            fontSize: isHorizontal ? 12 : 18,
-            fill: '#ffffff',
-            backgroundColor: 'rgba(0,0,0,0.3)',
-            padding: 8,
-            isTag: true,
-            customName: 'Tesco Tag',
-        });
-        canvas.add(tag);
-    };
 
     // BATCH EXPORT: Generate all 8 formats × 5 variants = 40 images
     const handleBatchExport = useCallback(async () => {
@@ -483,7 +313,7 @@ ${variants.map((v, i) => `${i + 1}. ${v.tone}: "${v.headline}"`).join('\n')}
     }, [generatedData, imageDataUrl]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-[#12161c] border border-white/10 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-white/5">
@@ -503,22 +333,27 @@ ${variants.map((v, i) => `${i + 1}. ${v.tone}: "${v.headline}"`).join('\n')}
                     </button>
                 </div>
 
-                {/* Progress Indicator */}
+                {/* Progress Indicator - Now shows compliance step */}
                 <div className="flex items-center gap-1 px-6 py-3 border-b border-[var(--border-subtle)]">
-                    {['Upload', 'Analyze', 'Choose', 'Create'].map((label, i) => {
+                    {['Upload', 'AI Generate', 'Compliance', 'Choose', 'Create'].map((label, i) => {
                         const s = i + 1;
+                        // Map UI steps to internal steps (step 2 covers both AI and Compliance)
+                        const isCompleted = s < step || (step === 2 && progress > 50 && s <= 3);
+                        const isActive = (step === 2 && s === 2 && progress <= 50) ||
+                            (step === 2 && s === 3 && progress > 50) ||
+                            (step === s);
                         return (
                             <div key={s} className="flex items-center flex-1">
                                 <div className="flex flex-col items-center">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${s < step ? 'bg-green-500 text-white' :
-                                        s === step ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white' :
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isCompleted ? 'bg-green-500 text-white' :
+                                        isActive ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white' :
                                             'bg-[var(--surface-overlay)] text-muted'
                                         }`}>
-                                        {s < step ? '✓' : s}
+                                        {isCompleted ? '✓' : s}
                                     </div>
                                     <span className="text-[9px] text-muted mt-1">{label}</span>
                                 </div>
-                                {s < 4 && <div className={`flex-1 h-0.5 mx-2 ${s < step ? 'bg-green-500' : 'bg-[var(--surface-overlay)]'}`} />}
+                                {s < 5 && <div className={`flex-1 h-0.5 mx-1 ${isCompleted ? 'bg-green-500' : 'bg-[var(--surface-overlay)]'}`} />}
                             </div>
                         );
                     })}
@@ -658,32 +493,51 @@ ${variants.map((v, i) => `${i + 1}. ${v.tone}: "${v.headline}"`).join('\n')}
                                 </div>
                             </div>
 
+                            {/* Compliance Summary */}
+                            {generatedData.complianceSummary && generatedData.complianceSummary.modifiedVariants > 0 && (
+                                <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                                    <p className="text-xs text-green-400 flex items-center gap-2">
+                                        <span>✅</span>
+                                        <span>
+                                            {generatedData.complianceSummary.modifiedVariants} variant(s) auto-fixed for compliance
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Variants grid */}
                             <div>
                                 <p className="text-sm font-medium text-secondary mb-2">Choose your creative variant:</p>
                                 <div className="grid grid-cols-5 gap-2">
                                     {generatedData.variants.map((variant, i) => {
-                                        const compliance = validateCompliance(variant.headline + ' ' + (variant.subheadline || ''));
+                                        // Use pre-computed compliance status from filter
+                                        const complianceStatus = variant.complianceStatus || { isCompliant: true, wasModified: false };
                                         return (
-                                        <button
-                                            key={i}
-                                            onClick={() => setSelectedVariant(i)}
-                                            className={`p-2 rounded-lg border-2 transition-all ${selectedVariant === i
-                                                ? 'border-amber-500 bg-amber-500/10 scale-105'
-                                                : 'border-[var(--border-default)] hover:border-amber-500/50'
-                                                }`}
-                                        >
-                                            {/* Mini preview */}
-                                            <div
-                                                className="aspect-square rounded-md mb-1 flex items-center justify-center"
-                                                style={{ backgroundColor: variant.backgroundColor }}
+                                            <button
+                                                key={i}
+                                                onClick={() => setSelectedVariant(i)}
+                                                className={`p-2 rounded-lg border-2 transition-all relative ${selectedVariant === i
+                                                    ? 'border-amber-500 bg-amber-500/10 scale-105'
+                                                    : 'border-[var(--border-default)] hover:border-amber-500/50'
+                                                    }`}
                                             >
-                                                <span className="text-xs text-center px-1 leading-tight" style={{ color: variant.headlineColor }}>
-                                                    {variant.headline.split(' ').slice(0, 2).join(' ')}
-                                                </span>
-                                            </div>
-                                            <p className="text-[9px] text-muted text-center capitalize">{variant.tone}</p>
-                                        </button>
+                                                {/* Compliance badge */}
+                                                {complianceStatus.wasModified && (
+                                                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center text-[8px] text-white" title="Auto-fixed for compliance">
+                                                        ✓
+                                                    </div>
+                                                )}
+                                                {/* Mini preview */}
+                                                <div
+                                                    className="aspect-square rounded-md mb-1 flex items-center justify-center"
+                                                    style={{ backgroundColor: variant.backgroundColor }}
+                                                >
+                                                    <span className="text-xs text-center px-1 leading-tight" style={{ color: variant.headlineColor }}>
+                                                        {variant.headline.split(' ').slice(0, 2).join(' ')}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[9px] text-muted text-center capitalize">{variant.tone}</p>
+                                            </button>
                                         );
                                     })}
                                 </div>

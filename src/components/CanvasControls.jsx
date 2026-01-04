@@ -1,11 +1,91 @@
-import React from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import useStore from '../store/useStore';
 
 export function CanvasControls({ onFit, onZoomIn, onZoomOut, zoomLevel }) {
     const { undo, redo, historyIndex, history } = useStore();
 
+    // Draggable state
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const dragRef = useRef(null);
+    const dragStartRef = useRef({ x: 0, y: 0, initialX: 0, initialY: 0 });
+
+    // Initialize position to center-bottom
+    useEffect(() => {
+        if (!isInitialized && dragRef.current) {
+            setIsInitialized(true);
+        }
+    }, [isInitialized]);
+
+    const handleMouseDown = useCallback((e) => {
+        if (e.target.closest('button')) return; // Don't drag when clicking buttons
+
+        setIsDragging(true);
+        dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            initialX: position.x,
+            initialY: position.y
+        };
+        e.preventDefault();
+    }, [position]);
+
+    const handleMouseMove = useCallback((e) => {
+        if (!isDragging) return;
+
+        const deltaX = e.clientX - dragStartRef.current.x;
+        const deltaY = e.clientY - dragStartRef.current.y;
+
+        setPosition({
+            x: dragStartRef.current.initialX + deltaX,
+            y: dragStartRef.current.initialY + deltaY
+        });
+    }, [isDragging]);
+
+    const handleMouseUp = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
+    // Add global mouse listeners for drag
+    useEffect(() => {
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [isDragging, handleMouseMove, handleMouseUp]);
+
     return (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 rounded-2xl bg-[#1a1f28]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-50 transition-all hover:bg-[#1a1f28] hover:scale-105 hover:shadow-blue-900/20">
+        <div
+            ref={dragRef}
+            className={`absolute bottom-8 left-1/2 flex items-center gap-2 p-2 rounded-2xl bg-[#1a1f28]/90 backdrop-blur-xl border border-white/10 shadow-2xl z-50 transition-shadow ${isDragging ? 'cursor-grabbing shadow-blue-500/30' : 'hover:shadow-blue-900/20'}`}
+            style={{
+                transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`,
+                userSelect: 'none',
+            }}
+            onMouseDown={handleMouseDown}
+        >
+            {/* Drag Handle */}
+            <div
+                className={`flex items-center justify-center w-6 h-10 rounded-lg cursor-grab ${isDragging ? 'cursor-grabbing bg-white/10' : 'hover:bg-white/5'} transition-colors`}
+                title="Drag to move"
+            >
+                <svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" className="text-slate-500">
+                    <circle cx="3" cy="4" r="1.5" />
+                    <circle cx="9" cy="4" r="1.5" />
+                    <circle cx="3" cy="10" r="1.5" />
+                    <circle cx="9" cy="10" r="1.5" />
+                    <circle cx="3" cy="16" r="1.5" />
+                    <circle cx="9" cy="16" r="1.5" />
+                </svg>
+            </div>
+
+            <div className="w-px h-5 bg-white/10" />
+
             {/* Undo/Redo Group */}
             <div className="flex items-center gap-1 pr-2 border-r border-white/10">
                 <button

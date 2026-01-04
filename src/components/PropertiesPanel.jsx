@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import useStore, { FORMAT_PRESETS } from '../store/useStore';
 import useCompliance, { COMPLIANCE_RULES } from '../hooks/useCompliance';
+import openRouterService from '../services/openRouterService';
 
 export function PropertiesPanel() {
     const {
@@ -11,6 +12,8 @@ export function PropertiesPanel() {
     const { runFullCompliance } = useCompliance();
     const [fixedCount, setFixedCount] = useState(0);
     const [showFixedBanner, setShowFixedBanner] = useState(false);
+    const [isFixing, setIsFixing] = useState(false);
+    const [fixStatus, setFixStatus] = useState('');
 
     // Run compliance on changes
     useEffect(() => {
@@ -23,61 +26,83 @@ export function PropertiesPanel() {
     const allIssues = [...complianceErrors, ...complianceWarnings];
     const errorCount = complianceErrors.length;
 
-    // AUTO-FIX ALL - One Click Fix
+    // AUTO-FIX ALL - AI Powered One Click Fix
     const autoFixAll = useCallback(async () => {
         if (!canvas) return;
 
-        let fixed = 0;
-        const objects = canvas.getObjects();
-        const minFontSize = COMPLIANCE_RULES?.minFontSize?.standard || 20;
+        setIsFixing(true);
+        setFixStatus('🔍 AI analyzing canvas...');
 
-        objects.forEach(obj => {
-            if (obj.isSafeZone || obj.isBackground) return;
-
-            // Fix: Font size too small
-            if ((obj.type === 'i-text' || obj.type === 'text') && !obj.isValueTile && !obj.isDrinkaware && !obj.isTag) {
-                if (obj.fontSize && obj.fontSize < minFontSize) {
-                    obj.set('fontSize', minFontSize);
-                    fixed++;
-                }
-            }
-        });
-
-        // Add headline if missing
-        const hasHeadline = objects.some(o =>
-            (o.type === 'i-text' || o.type === 'text') &&
-            o.fontSize >= 48 &&
-            !o.isValueTile && !o.isDrinkaware && !o.isTag
-        );
-
-        if (!hasHeadline) {
-            const { IText } = await import('fabric');
-            const format = FORMAT_PRESETS[useStore.getState().currentFormat];
-            const headline = new IText('Your Headline Here', {
-                left: format.width / 2,
-                top: format.height * 0.3,
-                originX: 'center',
-                originY: 'center',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 64,
-                fontWeight: 'bold',
-                fill: '#ffffff',
-                textAlign: 'center',
-                customName: 'Auto-Added Headline',
+        try {
+            const dataUrl = canvas.toDataURL({
+                format: 'jpeg',
+                quality: 0.8
             });
-            canvas.add(headline);
-            fixed++;
+
+            const currentFormat = useStore.getState().currentFormat;
+            const format = FORMAT_PRESETS[currentFormat];
+            const objects = canvas.getObjects().filter(o => !o.isSafeZone && !o.isBackground);
+            
+            // Map objects to a simpler format for AI
+            const objectData = objects.map(obj => ({
+                id: obj.id || `obj-${Math.random().toString(36).substr(2, 9)}`,
+                type: obj.type,
+                text: obj.text || obj.headline || '',
+                left: obj.left,
+                top: obj.top,
+                fontSize: obj.fontSize,
+                fill: obj.fill,
+                customName: obj.customName,
+                isPackshot: obj.isPackshot,
+                isValueTile: obj.isValueTile,
+                isDrinkaware: obj.isDrinkaware,
+                isTag: obj.isTag,
+                _original: obj // Keep reference to apply updates
+            }));
+
+            // Assign IDs if missing
+            objectData.forEach(od => {
+                if (!od._original.id) od._original.set('id', od.id);
+            });
+
+            setFixStatus('🪄 AI applying fixes...');
+            const result = await openRouterService.autoFixCompliance(
+                dataUrl,
+                [...complianceErrors, ...complianceWarnings],
+                objectData,
+                format
+            );
+
+            let fixed = 0;
+            if (result.fixes && result.fixes.length > 0) {
+                result.fixes.forEach(fix => {
+                    const obj = objects.find(o => o.id === fix.id);
+                    if (obj) {
+                        if (fix.updates) {
+                            Object.entries(fix.updates).forEach(([prop, value]) => {
+                                obj.set(prop, value);
+                            });
+                            fixed++;
+                        }
+                    }
+                });
+            }
+
+            canvas.renderAll();
+            saveToHistory();
+            updateLayers();
+
+            setFixedCount(fixed);
+            setShowFixedBanner(true);
+            setTimeout(() => setShowFixedBanner(false), 3000);
+            setTimeout(() => runFullCompliance(), 100);
+        } catch (error) {
+            console.error('AI Auto-fix failed:', error);
+        } finally {
+            setIsFixing(false);
+            setFixStatus('');
         }
-
-        canvas.renderAll();
-        saveToHistory();
-        updateLayers();
-
-        setFixedCount(fixed);
-        setShowFixedBanner(true);
-        setTimeout(() => setShowFixedBanner(false), 3000);
-        setTimeout(() => runFullCompliance(), 100);
-    }, [canvas, saveToHistory, updateLayers, runFullCompliance]);
+    }, [canvas, complianceErrors, complianceWarnings, saveToHistory, updateLayers, runFullCompliance]);
 
     // Update object property
     const updateProperty = useCallback((prop, value) => {
@@ -239,8 +264,23 @@ export function PropertiesPanel() {
 
                     {/* Auto-Fix Button */}
                     {errorCount > 0 && (
-                        <button onClick={autoFixAll} className="w-full mb-3 py-2 px-3 rounded-lg text-sm font-medium transition-all" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white' }}>
-                            ✨ Auto-Fix All Issues
+                        <button 
+                            onClick={autoFixAll} 
+                            disabled={isFixing}
+                            className={`w-full mb-3 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${isFixing ? 'opacity-70 cursor-not-allowed' : ''}`} 
+                            style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white' }}
+                        >
+                            {isFixing ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>{fixStatus || 'Fixing...'}</span>
+                                </>
+                            ) : (
+                                <>✨ Auto-Fix All Issues</>
+                            )}
                         </button>
                     )}
 

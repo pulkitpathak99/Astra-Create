@@ -1255,3 +1255,254 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .new-badge {
   animation: new-badge-pulse 2s ease-in-out infinite;
 }
+
+/* ============================================
+   DASHBOARD LANDING PAGE
+   Minimalistic, polished Tesco-branded design
+   ============================================ */
+
+.dashboard-landing {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background: #0a0d12;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-bg-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 61, 122, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
+  background-size: 100% 100%, 32px 32px;
+  pointer-events: none;
+}
+
+.dashboard-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Header / Logo */
+.dashboard-header {
+  margin-bottom: 48px;
+}
+
+.dashboard-logo {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.logo-mark {
+  color: #fff;
+}
+
+.logo-suffix {
+  color: #003d7a;
+}
+
+/* Hero Section */
+.dashboard-hero {
+  text-align: center;
+  margin-bottom: 56px;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-title {
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin: 0 0 20px 0;
+}
+
+.hero-accent {
+  color: #64748b;
+}
+
+.hero-subtitle {
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Workflow Cards */
+.dashboard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 48px;
+  animation: fadeInUp 0.6s ease-out 0.1s both;
+}
+
+.workflow-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  position: relative;
+}
+
+.workflow-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.workflow-card:active {
+  transform: translateX(2px);
+}
+
+/* Primary card styling */
+.workflow-card--primary {
+  background: linear-gradient(135deg, rgba(0, 61, 122, 0.15) 0%, rgba(0, 61, 122, 0.05) 100%);
+  border-color: rgba(0, 61, 122, 0.3);
+}
+
+.workflow-card--primary:hover {
+  background: linear-gradient(135deg, rgba(0, 61, 122, 0.2) 0%, rgba(0, 61, 122, 0.08) 100%);
+  border-color: rgba(0, 61, 122, 0.4);
+}
+
+.workflow-card--primary .card-icon {
+  color: #3b82f6;
+}
+
+/* Card components */
+.card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 4px 0;
+}
+
+.card-description {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.card-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.card-arrow {
+  font-size: 18px;
+  color: #475569;
+  margin-left: 8px;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.workflow-card:hover .card-arrow {
+  transform: translateX(4px);
+  color: #94a3b8;
+}
+
+/* Secondary links */
+.dashboard-secondary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  animation: fadeInUp 0.6s ease-out 0.2s both;
+}
+
+.secondary-link {
+  font-size: 13px;
+  color: #64748b;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.2s ease;
+}
+
+.secondary-link:hover {
+  color: #94a3b8;
+}
+
+.secondary-divider {
+  color: #334155;
+  font-size: 8px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .dashboard-landing {
+    padding: 32px 16px;
+  }
+  
+  .dashboard-header {
+    margin-bottom: 32px;
+  }
+  
+  .dashboard-hero {
+    margin-bottom: 40px;
+  }
+  
+  .workflow-card {
+    padding: 16px 20px;
+  }
+  
+  .card-badge {
+    display: none;
+  }
+}

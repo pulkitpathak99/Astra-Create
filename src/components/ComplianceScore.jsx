@@ -7,7 +7,7 @@ import { useCompliance } from '../hooks/useCompliance';
  * Shows a visual score with color coding and friendly labels
  */
 export function ComplianceScore({ compact = false }) {
-    const { complianceScore, complianceErrors, complianceWarnings, calculateComplianceScore } = useStore();
+    const { complianceScore, complianceErrors, complianceWarnings, hasHardFailErrors, calculateComplianceScore } = useStore();
     const { runFullCompliance } = useCompliance();
 
     // Recalculate score when errors/warnings change
@@ -36,7 +36,7 @@ export function ComplianceScore({ compact = false }) {
     // Compact mode for toolbar
     if (compact) {
         return (
-            <div 
+            <div
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--surface-overlay)] ring-1 ${colors.ring} cursor-pointer hover:bg-[var(--surface-elevated)] transition-all`}
                 onClick={() => runFullCompliance()}
                 title={`Compliance Score: ${complianceScore}/100 - ${label}`}
@@ -81,13 +81,26 @@ export function ComplianceScore({ compact = false }) {
                         <span className={`font-bold text-lg ${colors.text}`}>{label}</span>
                     </div>
                     <p className="text-xs text-muted mt-1">
-                        {complianceErrors.length === 0 && complianceWarnings.length === 0 
+                        {complianceErrors.length === 0 && complianceWarnings.length === 0
                             ? 'Your creative meets all guidelines'
                             : `${complianceErrors.length} error${complianceErrors.length !== 1 ? 's' : ''}, ${complianceWarnings.length} warning${complianceWarnings.length !== 1 ? 's' : ''}`
                         }
                     </p>
                 </div>
             </div>
+
+            {/* Hard Fail Warning */}
+            {hasHardFailErrors && (
+                <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50">
+                    <div className="flex items-center gap-2">
+                        <span className="text-lg">🚫</span>
+                        <div>
+                            <p className="text-sm font-semibold text-red-400">Export Blocked</p>
+                            <p className="text-xs text-red-300/80">Fix all errors below to enable export</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Quick Actions */}
             <button

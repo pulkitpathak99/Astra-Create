@@ -39,7 +39,7 @@ class GeminiService {
     this.apiKeys = [
       import.meta.env.VITE_GEMINI_API_KEY || '',
       'AIzaSyCX6re2Getee5d41bSgqq6hD4vv7_iKw6U',
-      'AIzaSyAHYRrPwc-hfkJ81vom8Cv7mYkDmyjspJc',
+      'AIzaSyAF36tTdOw5YoEoSy4btwZh6Rr6PuiFjvo',
       'AIzaSyC6wrBqwBypRux22LcaBsZjyCKuGX4UTA8',
     ].filter(key => key && key.length > 10);
 
@@ -467,7 +467,7 @@ Return ONLY JSON:
     {
       "id": 1,
       "tone": "bold/friendly/premium/minimal/playful",
-      "headline": "3-5 word headline",
+      "headline": "Headline (MAX 35 CHARACTERS)",
       "subheadline": "5-10 word subheadline",
       "tag": "Only at Tesco",
       "priceType": "clubcard/white/new",
@@ -680,7 +680,10 @@ Format: ${format}
 - "Great Value" not "Best Value"
 - Focus on taste, convenience, quality
 
-Keep headlines SHORT (3-6 words max). NO prices (use Value Tiles for that).
+- "Great Value" not "Best Value"
+- Focus on taste, convenience, quality
+
+Keep headlines SHORT (MAX 35 CHARACTERS). NO prices (use Value Tiles for that).
 
 Return JSON only:
 {
@@ -740,7 +743,7 @@ ${endDate ? `Ends: ${endDate}` : ''}
 - "Fresh" instead of "Organic"
 
 Generate:
-1. Primary headline (3-5 words ONLY, punchy, COMPLIANT)
+1. Primary headline (MAX 35 CHARACTERS, punchy, COMPLIANT)
 2. Subheadline (5-10 words, COMPLIANT)
 3. Background color (hex) complementing the product
 4. Layout suggestions

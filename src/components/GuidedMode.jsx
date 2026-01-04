@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { FabricImage, IText, Rect } from 'fabric';
 import useStore, { FORMAT_PRESETS } from '../store/useStore';
 import geminiService from '../services/geminiService';
+import { buildCompliantCanvas, addPackshotToCanvas } from '../services/compliantTemplateBuilder';
 
 /**
  * GuidedMode - Streamlined 3-step wizard
@@ -79,154 +79,50 @@ export function GuidedMode({ onClose, onComplete }) {
         }
     }, [step, generatedData, productImageUrl, generateSuggestions]);
 
-    // Apply to canvas
+    // Apply to canvas using COMPLIANT TEMPLATE
+    // Uses the same layout structure as AI Creative Gallery for 100% compliance
     const applyToCanvas = useCallback(async () => {
         if (!canvas) return;
 
         setLoading(true);
-        const format = FORMAT_PRESETS[selectedFormat];
         setCurrentFormat(selectedFormat);
 
         try {
-            // Clear canvas
-            canvas.getObjects().forEach(obj => {
-                if (!obj.isSafeZone) canvas.remove(obj);
-            });
-
-            // Set background
-            const bgColor = generatedData?.variants?.[0]?.backgroundColor || '#1a1a2e';
-            canvas.backgroundColor = bgColor;
-            setBackgroundColor(bgColor);
-
-            // Add packshot
-            if (productImageUrl) {
-                await new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const maxSize = Math.min(format.width, format.height) * 0.35;
-                        const scale = Math.min(maxSize / img.width, maxSize / img.height);
-
-                        const fabricImg = new FabricImage(img, {
-                            left: format.width / 2,
-                            top: format.height * 0.55,
-                            scaleX: scale,
-                            scaleY: scale,
-                            originX: 'center',
-                            originY: 'center',
-                            customName: 'Product Packshot',
-                            isPackshot: true,
-                            isLeadPackshot: true,
-                        });
-                        canvas.add(fabricImg);
-                        resolve();
-                    };
-                    img.src = productImageUrl;
-                });
-            }
-
-            // Add headline
-            const headlineText = new IText(headline || 'Great Value', {
-                left: format.width / 2,
-                top: format.height * 0.2,
-                originX: 'center',
-                originY: 'center',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 56,
-                fontWeight: 'bold',
-                fill: '#ffffff',
-                textAlign: 'center',
-                customName: 'Headline',
-            });
-            canvas.add(headlineText);
-
-            // Add subheadline
-            const subText = new IText(subheadline || 'Available at Tesco', {
-                left: format.width / 2,
-                top: format.height * 0.3,
-                originX: 'center',
-                originY: 'center',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 28,
-                fill: '#ffffff',
-                opacity: 0.85,
-                textAlign: 'center',
-                customName: 'Subheadline',
-            });
-            canvas.add(subText);
-
-            // Add value tile
-            const tiles = {
-                new: { bg: '#e51c23', text: '#fff', w: 120, h: 50, label: 'NEW' },
-                white: { bg: '#fff', text: '#003d7a', w: 160, h: 60, border: '#003d7a', label: '£2.99' },
-                clubcard: { bg: '#003d7a', text: '#fff', w: 200, h: 80, label: '£1.99\nwas £2.99' },
+            // Build the variant object matching the format expected by compliantTemplateBuilder
+            const variant = {
+                headline: headline || 'Great Value',
+                subheadline: subheadline || 'Available at Tesco',
+                backgroundColor: generatedData?.variants?.[0]?.backgroundColor || '#1a1a2e',
+                headlineColor: '#ffffff',
+                textColor: '#ffffff',
+                priceType: selectedTileType,
+                price: selectedTileType === 'clubcard' ? '£1.99' : '£2.99',
+                wasPrice: '£2.99',
+                tag: 'Only at Tesco', // Will be auto-formatted for Clubcard by the builder
             };
-            const tileConfig = tiles[selectedTileType];
 
-            const tileRect = new Rect({
-                width: tileConfig.w,
-                height: tileConfig.h,
-                fill: tileConfig.bg,
-                rx: 6, ry: 6,
-                stroke: tileConfig.border || null,
-                strokeWidth: tileConfig.border ? 2 : 0,
-                originX: 'center', originY: 'center',
-                left: format.width / 2,
-                top: format.height * 0.82,
-                isValueTile: true,
-                valueTileType: selectedTileType,
-                customName: `${selectedTileType} Value Tile`,
-            });
-            canvas.add(tileRect);
+            const product = {
+                isAlcohol,
+            };
 
-            const tileText = new IText(tileConfig.label, {
-                fontSize: selectedTileType === 'clubcard' ? 22 : 26,
-                fontWeight: 'bold',
-                fontFamily: 'Inter, sans-serif',
-                fill: tileConfig.text,
-                originX: 'center', originY: 'center',
-                left: format.width / 2,
-                top: format.height * 0.82,
-                textAlign: 'center',
-                isValueTile: true,
-            });
-            canvas.add(tileText);
+            // Use compliant template builder (same as AI Gallery & Magic Wand)
+            await buildCompliantCanvas(
+                canvas,
+                variant,
+                product,
+                selectedFormat,
+                {
+                    setBackgroundColor,
+                    setIsAlcoholProduct,
+                    saveToHistory,
+                    updateLayers
+                }
+            );
 
-            // Handle alcohol
-            if (isAlcohol) {
-                setIsAlcoholProduct(true);
-                const drinkRect = new Rect({
-                    width: 180, height: 28, fill: '#ffffff', rx: 4, ry: 4,
-                    originX: 'center', originY: 'center',
-                    left: format.width - 100, top: format.height - 40,
-                    isDrinkaware: true, customName: 'Drinkaware',
-                });
-                const drinkText = new IText('drinkaware.co.uk', {
-                    fontSize: 14, fontFamily: 'Inter, sans-serif', fill: '#000000',
-                    originX: 'center', originY: 'center',
-                    left: format.width - 100, top: format.height - 40,
-                    isDrinkaware: true,
-                });
-                canvas.add(drinkRect, drinkText);
+            // Add packshot if available
+            if (productImageUrl) {
+                await addPackshotToCanvas(canvas, productImageUrl, selectedFormat);
             }
-
-            // Add tag
-            const tag = new IText('Only at Tesco', {
-                left: format.width / 2,
-                top: format.height - 50,
-                originX: 'center', originY: 'center',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: 18,
-                fill: '#ffffff',
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                padding: 8,
-                isTag: true,
-                customName: 'Tesco Tag',
-            });
-            canvas.add(tag);
-
-            canvas.renderAll();
-            saveToHistory();
-            updateLayers();
 
             onComplete?.();
             onClose();

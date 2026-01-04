@@ -540,22 +540,22 @@ export const useStore = create((set, get) => ({
     setCreativeProfile: (profileId) => {
         const profile = CREATIVE_PROFILES[profileId];
         if (!profile) return;
-        
+
         set({ creativeProfile: profileId });
-        
+
         // If profile locks background, update backgroundColor
         if (profile.constraints.background.locked) {
             set({ backgroundColor: profile.constraints.background.value });
         }
     },
-    
+
     // Backward compatibility getter (derived from creativeProfile)
     isLEPMode: false, // Will be computed in components via: creativeProfile === 'LOW_EVERYDAY_PRICE'
     setIsLEPMode: (val) => {
         // Legacy support - maps boolean to profile
-        set({ 
+        set({
             creativeProfile: val ? 'LOW_EVERYDAY_PRICE' : 'STANDARD',
-            isLEPMode: val 
+            isLEPMode: val
         });
     },
 
@@ -577,12 +577,15 @@ export const useStore = create((set, get) => ({
 
     // Compliance Score (0-100 gamification)
     complianceScore: 100,
+    hasHardFailErrors: false, // True when any hard fail compliance errors exist
     setComplianceScore: (score) => set({ complianceScore: Math.max(0, Math.min(100, score)) }),
     calculateComplianceScore: () => {
         const errors = get().complianceErrors.length;
         const warnings = get().complianceWarnings.length;
-        const score = Math.max(0, 100 - (errors * 15) - (warnings * 5));
-        set({ complianceScore: score });
+        // Hard fail = score 0 immediately (all compliance errors are hard fails)
+        const hasHardFails = errors > 0;
+        const score = hasHardFails ? 0 : Math.max(0, 100 - (warnings * 5));
+        set({ complianceScore: score, hasHardFailErrors: hasHardFails });
         return score;
     },
 

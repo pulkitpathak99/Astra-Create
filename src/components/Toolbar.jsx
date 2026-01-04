@@ -8,6 +8,7 @@ export function Toolbar({ onOpenMagicWand, onOpenDemoGallery, onOpenTemplates, o
         currentFormat, setCurrentFormat,
         canvas,
         complianceErrors,
+        hasHardFailErrors,
     } = useStore();
     const [exporting, setExporting] = useState(false);
     const [showCreateMenu, setShowCreateMenu] = useState(false);
@@ -147,13 +148,18 @@ export function Toolbar({ onOpenMagicWand, onOpenDemoGallery, onOpenTemplates, o
             {/* Export */}
             <button
                 onClick={() => exportAs('png')}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                disabled={exporting || hasHardFailErrors}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    hasHardFailErrors
+                        ? 'bg-red-600/50'
+                        : 'bg-emerald-600 hover:bg-emerald-500'
+                }`}
+                title={hasHardFailErrors ? 'Fix compliance issues before exporting' : 'Export creative as PNG'}
             >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                {exporting ? 'Exporting...' : 'Export'}
+                {exporting ? 'Exporting...' : hasHardFailErrors ? 'Fix Issues' : 'Export'}
             </button>
         </header>
     );

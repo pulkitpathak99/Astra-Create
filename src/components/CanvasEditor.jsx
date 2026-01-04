@@ -175,10 +175,10 @@ export function CanvasEditor({ onOpenWizard }) {
   };
 
   return (
-    <div ref={containerRef} className="canvas-workspace relative bg-[#0a0d12] flex items-center justify-center overflow-hidden w-full h-full">
+    <div ref={containerRef} className="canvas-workspace relative bg-[#0a0d12] flex items-center justify-center overflow-auto w-full h-full">
 
-      {/* Canvas Container */}
-      <div className="canvas-container shadow-2xl rounded-sm transition-all duration-300 ease-out relative z-10">
+      {/* Canvas Container - min size ensures scrollability when zoomed */}
+      <div className="canvas-container shadow-2xl rounded-sm transition-all duration-300 ease-out relative z-10 m-auto shrink-0">
         <canvas ref={canvasRef} />
       </div>
 

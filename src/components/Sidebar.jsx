@@ -26,12 +26,84 @@ const Icons = {
     ),
 };
 
-// Value tile configs
+// Value tile base configs - dimensions adjust per format
 const VALUE_TILES = [
-    { id: 'new', name: 'NEW', bg: '#e51c23', text: '#ffffff', w: 120, h: 50, fontSize: 28, editable: false },
-    { id: 'white', name: 'White', bg: '#ffffff', text: '#003d7a', w: 160, h: 60, fontSize: 24, editable: 'price', border: '#003d7a' },
-    { id: 'clubcard', name: 'Clubcard', bg: '#003d7a', text: '#ffffff', w: 200, h: 80, fontSize: 20, editable: 'prices' },
+    {
+        id: 'new',
+        name: 'New',
+        bg: '#00539F',
+        text: '#ffffff',
+        // Base dimensions (for 1080px formats)
+        w: 100,
+        h: 40,
+        fontSize: 24,
+        editable: false,
+        // Format-specific overrides
+        formatOverrides: {
+            'instagram-feed': { w: 100, h: 40, fontSize: 24 },
+            'instagram-story': { w: 120, h: 48, fontSize: 28 },
+            'facebook-feed': { w: 90, h: 36, fontSize: 22 },
+            'facebook-story': { w: 120, h: 48, fontSize: 28 },
+            'display-banner': { w: 60, h: 24, fontSize: 14 },
+            'display-mpu': { w: 50, h: 20, fontSize: 12 },
+            'pos-portrait': { w: 80, h: 32, fontSize: 18 },
+            'pos-landscape': { w: 80, h: 32, fontSize: 18 },
+        }
+    },
+    {
+        id: 'white',
+        name: 'White',
+        bg: '#ffffff',
+        text: '#00539F',
+        w: 160,
+        h: 60,
+        fontSize: 24,
+        editable: 'price',
+        border: '#00539F',
+        formatOverrides: {
+            'instagram-feed': { w: 160, h: 60, fontSize: 32 },
+            'instagram-story': { w: 180, h: 70, fontSize: 36 },
+            'facebook-feed': { w: 140, h: 52, fontSize: 28 },
+            'facebook-story': { w: 180, h: 70, fontSize: 36 },
+            'display-banner': { w: 80, h: 30, fontSize: 16 },
+            'display-mpu': { w: 70, h: 28, fontSize: 14 },
+            'pos-portrait': { w: 120, h: 48, fontSize: 22 },
+            'pos-landscape': { w: 120, h: 48, fontSize: 22 },
+        }
+    },
+    {
+        id: 'clubcard',
+        name: 'Clubcard Price',
+        bg: '#FFD700', // Tesco yellow
+        text: '#00539F', // Tesco blue
+        w: 160,
+        h: 160,
+        fontSize: 48,
+        editable: 'prices',
+        isCircular: true,
+        labelText: 'Clubcard Price',
+        labelFontSize: 14,
+        formatOverrides: {
+            'instagram-feed': { w: 160, h: 160, fontSize: 48, labelFontSize: 14 },
+            'instagram-story': { w: 200, h: 200, fontSize: 56, labelFontSize: 18 },
+            'facebook-feed': { w: 130, h: 130, fontSize: 38, labelFontSize: 12 },
+            'facebook-story': { w: 200, h: 200, fontSize: 56, labelFontSize: 18 },
+            'display-banner': { w: 60, h: 60, fontSize: 18, labelFontSize: 8 },
+            'display-mpu': { w: 70, h: 70, fontSize: 22, labelFontSize: 9 },
+            'pos-portrait': { w: 120, h: 120, fontSize: 36, labelFontSize: 11 },
+            'pos-landscape': { w: 120, h: 120, fontSize: 36, labelFontSize: 11 },
+        }
+    },
 ];
+
+// Helper function to get format-specific tile dimensions
+const getTileForFormat = (tile, formatKey) => {
+    const overrides = tile.formatOverrides?.[formatKey];
+    if (overrides) {
+        return { ...tile, ...overrides };
+    }
+    return tile;
+};
 
 // Comprehensive Shapes Library
 const SHAPE_LIBRARY = {
@@ -717,15 +789,17 @@ export function Sidebar() {
     };
 
     // Value tile handler
-    const addValueTile = (tile) => {
+    const addValueTile = (baseTile) => {
         if (!canvas) return;
         const format = FORMAT_PRESETS[currentFormat];
         const config = format.config || { valueTileScale: 1.0 };
-        const scale = config.valueTileScale;
+
+        // Get format-specific tile dimensions (no additional scaling needed)
+        const tile = getTileForFormat(baseTile, currentFormat);
 
         // Check if this tile type already exists (only one of each type allowed)
         const existingTileOfType = canvas.getObjects().find(
-            o => o.isValueTile && o.valueTileType === tile.id && o.type === 'rect'
+            o => o.isValueTile && o.valueTileType === tile.id && (o.type === 'rect' || o.type === 'circle')
         );
         if (existingTileOfType) {
             alert(`A ${tile.name} tile already exists on the canvas. Only one of each type is allowed.`);
@@ -733,85 +807,264 @@ export function Sidebar() {
         }
 
         // Fixed position based on tile type (predefined positions per compliance)
-        // Value tiles go near the bottom, but above the tag area (last 50px reserved for tag)
-        const tileY = format.height - (80 * scale) - 30; // Leave space for tag
+        // Clubcard needs more vertical space due to its circular design
+        const clubcardTileY = format.height - (tile.h / 2) - 40;
+        const standardTileY = format.height - tile.h - 30;
+
         const tilePositions = {
-            'new': { x: format.width * 0.15, y: tileY },
-            'white': { x: format.width * 0.5, y: tileY },
-            'clubcard': { x: format.width * 0.5, y: tileY },
+            'new': { x: format.width * 0.15, y: standardTileY },
+            'white': { x: format.width * 0.5, y: standardTileY },
+            'clubcard': { x: format.width * 0.65, y: clubcardTileY },
         };
 
         // If horizontal layout, adjust positions
         if (config.layout === 'horizontal') {
             tilePositions.new = { x: format.width * 0.85, y: format.height * 0.25 };
             tilePositions.white = { x: format.width * 0.85, y: format.height * 0.5 };
-            tilePositions.clubcard = { x: format.width * 0.85, y: format.height * 0.5 };
+            tilePositions.clubcard = { x: format.width * 0.75, y: format.height * 0.5 };
         }
 
-        const pos = tilePositions[tile.id] || { x: format.width / 2, y: tileY };
+        const pos = tilePositions[tile.id] || { x: format.width / 2, y: standardTileY };
 
-        const rect = new Rect({
-            width: tile.w * scale,
-            height: tile.h * scale,
-            fill: tile.bg,
-            rx: 4 * scale, ry: 4 * scale,
-            stroke: tile.border || null,
-            strokeWidth: tile.border ? (2 * scale) : 0,
-            originX: 'center', originY: 'center',
-            left: pos.x, top: pos.y,
-            // Locked - cannot be moved per compliance
-            selectable: false,
-            evented: false,
-            lockMovementX: true,
-            lockMovementY: true,
-            lockRotation: true,
-            lockScalingX: true,
-            lockScalingY: true,
-            hasControls: false,
-            hasBorders: false,
-            isValueTile: true,
-            valueTileType: tile.id,
-            customName: tile.name,
-        });
+        // Handle Clubcard tile differently - circular design matching Tesco's official look
+        if (tile.isCircular && tile.id === 'clubcard') {
+            const radius = tile.w / 2;
 
-        let displayText = tile.name;
-        if (tile.id === 'white') displayText = whitePrice;
-        if (tile.id === 'clubcard') displayText = `${clubcardPrice}\nwas ${clubcardRegular}`;
+            // Yellow circular background
+            const circle = new Circle({
+                radius: radius,
+                fill: tile.bg, // Tesco yellow #FFD700
+                originX: 'center',
+                originY: 'center',
+                left: pos.x,
+                top: pos.y,
+                // Locked - cannot be moved per compliance
+                selectable: false,
+                evented: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                hasBorders: false,
+                isValueTile: true,
+                valueTileType: tile.id,
+                customName: 'Clubcard Circle',
+            });
+            canvas.add(circle);
 
-        // Text editability depends on tile type per compliance:
-        // - NEW: not editable at all
-        // - White: only price editable (allow text editing)
-        // - Clubcard: only prices editable (allow text editing)
-        const isEditable = tile.id !== 'new';
+            // Offer price - large, bold, centered in circle (editable)
+            const priceText = new IText(clubcardPrice, {
+                fontSize: tile.fontSize,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: tile.text, // Tesco blue #00539F
+                originX: 'center',
+                originY: 'center',
+                left: pos.x,
+                top: pos.y - (radius * 0.15), // Slightly above center
+                textAlign: 'center',
+                selectable: true,
+                evented: true,
+                editable: true,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                isValueTile: true,
+                valueTileType: tile.id,
+                customName: 'Clubcard Price',
+            });
+            canvas.add(priceText);
 
-        const text = new IText(displayText, {
-            fontSize: tile.fontSize * scale,
-            fontWeight: 'bold',
-            fontFamily: 'Inter, sans-serif',
-            fill: tile.text,
-            originX: 'center', originY: 'center',
-            left: pos.x, top: pos.y,
-            textAlign: 'center',
-            // Editable for price tiles, but position is still locked
-            selectable: isEditable,
-            evented: isEditable,
-            editable: isEditable,
-            lockMovementX: true,
-            lockMovementY: true,
-            lockRotation: true,
-            lockScalingX: true,
-            lockScalingY: true,
-            hasControls: false,
-            isValueTile: true,
-            valueTileType: tile.id,
-            customName: `${tile.name} Text`,
-        });
+            // "Clubcard Price" label below price
+            const labelText = new IText(tile.labelText || 'Clubcard Price', {
+                fontSize: tile.labelFontSize || 14,
+                fontWeight: 'normal',
+                fontFamily: 'Inter, sans-serif',
+                fill: tile.text, // Same blue
+                originX: 'center',
+                originY: 'center',
+                left: pos.x,
+                top: pos.y + (radius * 0.45), // Below the price
+                textAlign: 'center',
+                selectable: false,
+                evented: false,
+                editable: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                isValueTile: true,
+                valueTileType: tile.id,
+                customName: 'Clubcard Label',
+            });
+            canvas.add(labelText);
 
-        canvas.add(rect);
-        canvas.add(text);
+            // Regular price - shown to the left of the circle (editable)
+            const regularPriceY = pos.y;
+            const regularPriceX = pos.x - radius - 90; // Increased spacing
+
+            // "Original Price" label above the regular price
+            const originalPriceLabel = new IText('Original Price', {
+                fontSize: tile.fontSize * 0.25,
+                fontWeight: 'normal',
+                fontFamily: 'Inter, sans-serif',
+                fill: '#00539F', // Tesco blue
+                originX: 'center',
+                originY: 'center',
+                left: regularPriceX,
+                top: regularPriceY - (tile.fontSize * 0.45),
+                textAlign: 'center',
+                selectable: false,
+                evented: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                isValueTile: true,
+                valueTileType: 'clubcard-regular',
+                customName: 'Original Price Label',
+            });
+            canvas.add(originalPriceLabel);
+
+            const regularPriceText = new IText(clubcardRegular, {
+                fontSize: tile.fontSize * 0.7,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: '#00539F', // Tesco blue
+                originX: 'center',
+                originY: 'center',
+                left: regularPriceX,
+                top: regularPriceY + (tile.fontSize * 0.1), // Slightly lower to accommodate label
+                textAlign: 'center',
+                selectable: true,
+                evented: true,
+                editable: true,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                isValueTile: true,
+                valueTileType: 'clubcard-regular',
+                customName: 'Regular Price',
+            });
+            canvas.add(regularPriceText);
+
+            // Auto-add clubcard tag if end date is set
+            if (clubcardEndDate) {
+                const existingTag = canvas.getObjects().find(o => o.isTag);
+                if (!existingTag) {
+                    const tagText = `Available in selected stores. Clubcard/app required. Ends ${clubcardEndDate}`;
+                    const tag = new IText(tagText, {
+                        left: format.width / 2,
+                        top: format.height - 30,
+                        originX: 'center',
+                        originY: 'center',
+                        fontFamily: 'Inter, sans-serif',
+                        fontSize: Math.max(12, tile.fontSize * 0.3),
+                        fill: '#666666',
+                        textAlign: 'center',
+                        isTag: true,
+                        customName: 'Clubcard Tag',
+                        lockMovementX: true,
+                        lockMovementY: true,
+                    });
+                    canvas.add(tag);
+                }
+            }
+        } else {
+            // Standard rectangular tiles (NEW, White)
+            const rect = new Rect({
+                width: tile.w,
+                height: tile.h,
+                fill: tile.bg,
+                rx: 4, ry: 4,
+                stroke: tile.border || null,
+                strokeWidth: tile.border ? 2 : 0,
+                originX: 'center', originY: 'center',
+                left: pos.x, top: pos.y,
+                // Locked - cannot be moved per compliance
+                selectable: false,
+                evented: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                hasBorders: false,
+                isValueTile: true,
+                valueTileType: tile.id,
+                customName: tile.name,
+            });
+
+            let displayText = tile.name;
+            if (tile.id === 'white') displayText = whitePrice;
+
+            // Text editability depends on tile type per compliance:
+            // - NEW: not editable at all
+            // - White: only price editable
+            const isEditable = tile.id !== 'new';
+
+            const text = new IText(displayText, {
+                fontSize: tile.fontSize,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: tile.text,
+                originX: 'center', originY: 'center',
+                left: pos.x, top: pos.y,
+                textAlign: 'center',
+                selectable: isEditable,
+                evented: isEditable,
+                editable: isEditable,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hasControls: false,
+                isValueTile: true,
+                valueTileType: tile.id,
+                customName: `${tile.name} Text`,
+            });
+
+            canvas.add(rect);
+            canvas.add(text);
+        }
+
         canvas.renderAll();
         saveToHistory();
         updateLayers();
+    };
+
+    // Remove value tile by type
+    const removeValueTile = (tileType) => {
+        if (!canvas) return;
+
+        // Find and remove all objects associated with this tile type
+        const objectsToRemove = canvas.getObjects().filter(o =>
+            o.valueTileType === tileType ||
+            o.valueTileType === `${tileType}-regular` // For Clubcard regular price
+        );
+
+        if (objectsToRemove.length === 0) {
+            return;
+        }
+
+        objectsToRemove.forEach(obj => canvas.remove(obj));
+        canvas.renderAll();
+        saveToHistory();
+        updateLayers();
+    };
+
+    // Check if a specific tile type exists on canvas
+    const hasTileOnCanvas = (tileType) => {
+        if (!canvas) return false;
+        return canvas.getObjects().some(o =>
+            o.valueTileType === tileType && (o.type === 'rect' || o.type === 'circle')
+        );
     };
 
     // Tag handler
@@ -822,7 +1075,7 @@ export function Sidebar() {
         let tagText = isExclusive ? 'Only at Tesco' : 'Available at Tesco';
         const hasClubcard = canvas.getObjects().some(o => o.valueTileType === 'clubcard');
         if (hasClubcard && clubcardEndDate) {
-            tagText = `Clubcard/app required. Ends ${clubcardEndDate}`;
+            tagText = `Available in selected stores. Clubcard/app required. Ends ${clubcardEndDate}`;
         }
 
         const text = new IText(tagText, {
@@ -920,6 +1173,7 @@ export function Sidebar() {
         if (!variant) return;
 
         const format = FORMAT_PRESETS[currentFormat];
+        const tileScale = format.config?.valueTileScale || 1.0;
 
         // Clear canvas
         canvas.getObjects().forEach(obj => { if (!obj.isSafeZone) canvas.remove(obj); });
@@ -958,81 +1212,170 @@ export function Sidebar() {
         });
         canvas.add(subheadline);
 
-        // Add value tile based on priceType
+        // Add value tile based on priceType - using new circular Clubcard design
         const tileConfig = VALUE_TILES.find(t => t.id === variant.priceType) || VALUE_TILES[0];
-        const tileScale = format.config?.valueTileScale || 1.0;
-        const tilePos = { x: format.width / 2, y: format.height - (80 * tileScale) };
 
-        const tileRect = new Rect({
-            width: tileConfig.w * tileScale,
-            height: tileConfig.h * tileScale,
-            fill: tileConfig.bg,
-            rx: 4 * tileScale,
-            ry: 4 * tileScale,
-            stroke: tileConfig.border || null,
-            strokeWidth: tileConfig.border ? (2 * tileScale) : 0,
-            originX: 'center',
-            originY: 'center',
-            left: tilePos.x,
-            top: tilePos.y,
-            selectable: false,
-            evented: false,
-            isValueTile: true,
-            valueTileType: tileConfig.id,
-            customName: tileConfig.name,
-        });
+        if (tileConfig.isCircular && tileConfig.id === 'clubcard') {
+            // Circular Clubcard design matching Tesco's official look
+            const radius = (tileConfig.w * tileScale) / 2;
+            const clubcardPosY = format.height - radius - 80;
+            const clubcardPosX = format.width * 0.65;
 
-        let displayText = tileConfig.name;
-        if (tileConfig.id === 'white') displayText = variant.price || '£2.50';
-        if (tileConfig.id === 'clubcard') displayText = `${variant.price || '£1.50'}\nwas ${variant.wasPrice || '£2.00'}`;
+            // Yellow circular background
+            const circle = new Circle({
+                radius: radius,
+                fill: tileConfig.bg, // Tesco yellow #FFD700
+                originX: 'center',
+                originY: 'center',
+                left: clubcardPosX,
+                top: clubcardPosY,
+                selectable: false,
+                evented: false,
+                isValueTile: true,
+                valueTileType: tileConfig.id,
+                customName: 'Clubcard Circle',
+            });
+            canvas.add(circle);
 
-        const tileText = new IText(displayText, {
-            fontSize: tileConfig.fontSize * tileScale,
-            fontWeight: 'bold',
-            fontFamily: 'Inter, sans-serif',
-            fill: tileConfig.text,
-            originX: 'center',
-            originY: 'center',
-            left: tilePos.x,
-            top: tilePos.y,
-            textAlign: 'center',
-            selectable: tileConfig.id !== 'new',
-            evented: tileConfig.id !== 'new',
-            isValueTile: true,
-            valueTileType: tileConfig.id,
-            customName: `${tileConfig.name} Text`,
-        });
+            // Offer price - large, bold, centered in circle (editable)
+            const priceText = new IText(variant.price || '£1.50', {
+                fontSize: tileConfig.fontSize * tileScale,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: tileConfig.text, // Tesco blue #00539F
+                originX: 'center',
+                originY: 'center',
+                left: clubcardPosX,
+                top: clubcardPosY - (radius * 0.15),
+                textAlign: 'center',
+                selectable: true,
+                evented: true,
+                editable: true,
+                lockMovementX: true,
+                lockMovementY: true,
+                isValueTile: true,
+                valueTileType: tileConfig.id,
+                customName: 'Clubcard Price',
+            });
+            canvas.add(priceText);
 
-        canvas.add(tileRect);
-        canvas.add(tileText);
+            // "Clubcard Price" label below price
+            const labelText = new IText(tileConfig.labelText || 'Clubcard Price', {
+                fontSize: (tileConfig.labelFontSize || 14) * tileScale,
+                fontWeight: 'normal',
+                fontFamily: 'Inter, sans-serif',
+                fill: tileConfig.text,
+                originX: 'center',
+                originY: 'center',
+                left: clubcardPosX,
+                top: clubcardPosY + (radius * 0.45),
+                textAlign: 'center',
+                selectable: false,
+                evented: false,
+                isValueTile: true,
+                valueTileType: tileConfig.id,
+                customName: 'Clubcard Label',
+            });
+            canvas.add(labelText);
 
-        // Add Drinkaware for alcohol products
+            // Regular price - shown to the left of the circle (editable)
+            const regularPriceX = clubcardPosX - radius - (60 * tileScale);
+            const regularPriceText = new IText(variant.wasPrice || '£2.00', {
+                fontSize: (tileConfig.fontSize * 0.7) * tileScale,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: '#00539F',
+                originX: 'center',
+                originY: 'center',
+                left: regularPriceX,
+                top: clubcardPosY,
+                textAlign: 'center',
+                selectable: true,
+                evented: true,
+                editable: true,
+                lockMovementX: true,
+                lockMovementY: true,
+                isValueTile: true,
+                valueTileType: 'clubcard-regular',
+                customName: 'Regular Price',
+            });
+            canvas.add(regularPriceText);
+        } else {
+            // Standard rectangular tiles (NEW, White)
+            const tilePos = { x: format.width / 2, y: format.height - (80 * tileScale) };
+
+            const tileRect = new Rect({
+                width: tileConfig.w * tileScale,
+                height: tileConfig.h * tileScale,
+                fill: tileConfig.bg,
+                rx: 4 * tileScale,
+                ry: 4 * tileScale,
+                stroke: tileConfig.border || null,
+                strokeWidth: tileConfig.border ? (2 * tileScale) : 0,
+                originX: 'center',
+                originY: 'center',
+                left: tilePos.x,
+                top: tilePos.y,
+                selectable: false,
+                evented: false,
+                isValueTile: true,
+                valueTileType: tileConfig.id,
+                customName: tileConfig.name,
+            });
+
+            let displayText = tileConfig.name;
+            if (tileConfig.id === 'white') displayText = variant.price || '£2.50';
+
+            const tileText = new IText(displayText, {
+                fontSize: tileConfig.fontSize * tileScale,
+                fontWeight: 'bold',
+                fontFamily: 'Inter, sans-serif',
+                fill: tileConfig.text,
+                originX: 'center',
+                originY: 'center',
+                left: tilePos.x,
+                top: tilePos.y,
+                textAlign: 'center',
+                selectable: tileConfig.id !== 'new',
+                evented: tileConfig.id !== 'new',
+                isValueTile: true,
+                valueTileType: tileConfig.id,
+                customName: `${tileConfig.name} Text`,
+            });
+
+            canvas.add(tileRect);
+            canvas.add(tileText);
+        }
+
+        // Add Drinkaware for alcohol products - FIXED: font size 20px minimum for compliance
         if (demo.product.isAlcohol) {
             setIsAlcoholProduct(true);
             const drinkRect = new Rect({
-                width: 180, height: 28, fill: '#ffffff', rx: 4, ry: 4,
+                width: 200, height: 32, fill: '#ffffff', rx: 4, ry: 4,
                 originX: 'center', originY: 'center',
-                left: format.width - 100, top: format.height - 40,
+                left: format.width - 110, top: format.height - 45,
                 isDrinkaware: true, customName: 'Drinkaware',
                 selectable: false, evented: false,
             });
             const drinkText = new IText('drinkaware.co.uk', {
-                fontSize: 14, fontFamily: 'Inter, sans-serif', fill: '#000000',
+                fontSize: 20, // FIXED: minimum 20px for compliance
+                fontFamily: 'Inter, sans-serif',
+                fill: '#000000',
                 originX: 'center', originY: 'center',
-                left: format.width - 100, top: format.height - 40,
+                left: format.width - 110, top: format.height - 45,
                 isDrinkaware: true, editable: false,
             });
             canvas.add(drinkRect, drinkText);
         }
 
-        // Add tag
+        // Add tag - FIXED: use full format for Clubcard
         let tagText = 'Only at Tesco';
         if (variant.priceType === 'clubcard') {
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + 14);
             const dd = String(endDate.getDate()).padStart(2, '0');
             const mm = String(endDate.getMonth() + 1).padStart(2, '0');
-            tagText = `Clubcard/app required. Ends ${dd}/${mm}`;
+            tagText = `Available in selected stores. Clubcard/app required. Ends ${dd}/${mm}`;
         }
 
         const tag = new IText(tagText, {
@@ -1041,7 +1384,7 @@ export function Sidebar() {
             originX: 'center',
             originY: 'center',
             fontFamily: 'Inter, sans-serif',
-            fontSize: 14,
+            fontSize: 20, // FIXED: minimum 20px for accessibility
             fill: '#ffffff',
             backgroundColor: 'rgba(0,0,0,0.6)',
             padding: 8,
@@ -1151,9 +1494,7 @@ export function Sidebar() {
                                     disabled={aiRemovingBg || packshotCount >= 3}
                                     className="w-full px-3 py-3 rounded-lg border border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/5 hover:bg-[var(--accent-primary)]/10 hover:border-[var(--accent-primary)]/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed group relative"
                                 >
-                                    <span className="absolute -top-2 right-3 text-[9px] bg-[var(--accent-primary)] text-white px-2 py-0.5 rounded-full font-medium">
-                                        Recommended
-                                    </span>
+
                                     {aiRemovingBg ? (
                                         <div className="flex items-center justify-center gap-2 py-1">
                                             <span className="animate-spin text-base">⏳</span>
@@ -1543,50 +1884,74 @@ export function Sidebar() {
                                     </span>
                                 )}
                             </div>
-                            <p className="text-xs text-muted mb-3">Click to add to canvas</p>
+                            <p className="text-xs text-muted mb-3">Click to add • Right-click to remove</p>
 
                             <div className="grid grid-cols-1 gap-2">
                                 {/* NEW Tile */}
-                                <button
-                                    onClick={() => addValueTile(VALUE_TILES[0])}
-                                    disabled={!isValueTileAllowed('new')}
-                                    className={`flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all shadow-lg ${isValueTileAllowed('new')
-                                        ? 'bg-[#e51c23] hover:bg-[#c41820] text-white hover:scale-[1.02]'
-                                        : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
-                                        }`}
-                                >
-                                    NEW
-                                    {!isValueTileAllowed('new') && <span className="ml-2 text-xs">🔒</span>}
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => hasTileOnCanvas('new') ? removeValueTile('new') : addValueTile(VALUE_TILES[0])}
+                                        disabled={!isValueTileAllowed('new')}
+                                        className={`w-full flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all ${isValueTileAllowed('new')
+                                            ? hasTileOnCanvas('new')
+                                                ? 'bg-[#00539F] text-white ring-2 ring-green-400 ring-offset-2 ring-offset-[#1a1f28]'
+                                                : 'bg-[#00539F] hover:bg-[#003d7a] text-white hover:scale-[1.02]'
+                                            : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        {hasTileOnCanvas('new') ? '✓ New' : 'New'}
+                                        {!isValueTileAllowed('new') && <span className="ml-2 text-xs">🔒</span>}
+                                    </button>
+                                    {hasTileOnCanvas('new') && (
+                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] text-white cursor-pointer hover:bg-red-600"
+                                            onClick={() => removeValueTile('new')} title="Remove from canvas">×</span>
+                                    )}
+                                </div>
 
                                 {/* Price Tile */}
-                                <button
-                                    onClick={() => addValueTile(VALUE_TILES[1])}
-                                    disabled={!isValueTileAllowed('white')}
-                                    className={`flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all ${isValueTileAllowed('white')
-                                        ? 'bg-white border-2 border-[#003d7a] text-[#003d7a] hover:scale-[1.02] hover:shadow-lg'
-                                        : 'bg-gray-500/30 border-2 border-gray-500/30 text-gray-500 cursor-not-allowed'
-                                        }`}
-                                >
-                                    {whitePrice || '£2.50'}
-                                    {!isValueTileAllowed('white') && <span className="ml-2 text-xs">🔒</span>}
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => hasTileOnCanvas('white') ? removeValueTile('white') : addValueTile(VALUE_TILES[1])}
+                                        disabled={!isValueTileAllowed('white')}
+                                        className={`w-full flex items-center justify-center p-4 rounded-lg font-bold text-lg transition-all ${isValueTileAllowed('white')
+                                            ? hasTileOnCanvas('white')
+                                                ? 'bg-white border-2 border-[#00539F] text-[#00539F] ring-2 ring-green-400 ring-offset-2 ring-offset-[#1a1f28]'
+                                                : 'bg-white border-2 border-[#00539F] text-[#00539F] hover:scale-[1.02] hover:shadow-lg'
+                                            : 'bg-gray-500/30 border-2 border-gray-500/30 text-gray-500 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        {hasTileOnCanvas('white') ? `✓ ${whitePrice || '£2.50'}` : whitePrice || '£2.50'}
+                                        {!isValueTileAllowed('white') && <span className="ml-2 text-xs">🔒</span>}
+                                    </button>
+                                    {hasTileOnCanvas('white') && (
+                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] text-white cursor-pointer hover:bg-red-600"
+                                            onClick={() => removeValueTile('white')} title="Remove from canvas">×</span>
+                                    )}
+                                </div>
 
                                 {/* Clubcard Tile */}
-                                <button
-                                    onClick={() => addValueTile(VALUE_TILES[2])}
-                                    disabled={!isValueTileAllowed('clubcard')}
-                                    className={`flex flex-col items-center justify-center p-4 rounded-lg font-bold transition-all shadow-lg ${isValueTileAllowed('clubcard')
-                                        ? 'bg-[#003d7a] text-white hover:scale-[1.02]'
-                                        : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
-                                        }`}
-                                >
-                                    <span className="text-lg flex items-center">
-                                        {clubcardPrice || '£1.50'}
-                                        {!isValueTileAllowed('clubcard') && <span className="ml-2 text-xs">🔒</span>}
-                                    </span>
-                                    <span className="text-xs font-normal opacity-70">was {clubcardRegular || '£2.00'}</span>
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => hasTileOnCanvas('clubcard') ? removeValueTile('clubcard') : addValueTile(VALUE_TILES[2])}
+                                        disabled={!isValueTileAllowed('clubcard')}
+                                        className={`w-full flex flex-col items-center justify-center p-4 rounded-lg font-bold transition-all ${isValueTileAllowed('clubcard')
+                                            ? hasTileOnCanvas('clubcard')
+                                                ? 'bg-[#FFD700] text-[#00539F] ring-2 ring-green-400 ring-offset-2 ring-offset-[#1a1f28]'
+                                                : 'bg-[#FFD700] hover:bg-[#e6c200] text-[#00539F] hover:scale-[1.02]'
+                                            : 'bg-gray-500/30 text-gray-500 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        <span className="text-lg flex items-center">
+                                            {hasTileOnCanvas('clubcard') ? `✓ ${clubcardPrice || '£1.50'}` : clubcardPrice || '£1.50'}
+                                            {!isValueTileAllowed('clubcard') && <span className="ml-2 text-xs">🔒</span>}
+                                        </span>
+                                        <span className="text-xs font-normal opacity-70">Clubcard Price</span>
+                                    </button>
+                                    {hasTileOnCanvas('clubcard') && (
+                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] text-white cursor-pointer hover:bg-red-600"
+                                            onClick={() => removeValueTile('clubcard')} title="Remove from canvas">×</span>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Profile Restriction Notice */}
