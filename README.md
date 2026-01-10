@@ -3,7 +3,6 @@
 > **Transform product images into compliant retail media campaigns in seconds with autonomous AI generation.**
 
 [![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react)](https://react.dev)
-[![Powered by Gemini](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?logo=google)](https://ai.google.dev/)
 [![Fabric.js](https://img.shields.io/badge/Canvas-Fabric.js-ff69b4)](http://fabricjs.com/)
 
 ---
